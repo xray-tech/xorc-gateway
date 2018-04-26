@@ -1,3 +1,4 @@
-
-/target
-**/*.rs.bk
+src/proto_events/*
+!src/protobuf_events/mod.rs
+config/config.toml
+target

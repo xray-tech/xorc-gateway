@@ -1,5 +1,15 @@
+#[macro_use] extern crate serde_derive;
+
 extern crate hyper;
 extern crate pretty_env_logger;
+extern crate ring;
+extern crate serde;
+extern crate serde_json;
+extern crate protobuf;
+extern crate chrono;
+
+mod events;
+mod proto_events;
 
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use hyper::service::service_fn_ok;
@@ -7,11 +17,14 @@ use hyper::rt::Future;
 
 fn sdk_gateway(req: Request<Body>) -> Response<Body> {
     match (req.method(), req.uri().path()) {
-        (&Method::GET, "/") | (&Method::POST, "/") => {
-            Response::new("kulli".into())
+        (&Method::OPTIONS, "/") => {
+            Response::new("".into())
         },
-        (&Method::POST, "/echo") => {
+        (&Method::POST, "/") => {
             Response::new(req.into_body())
+        },
+        (&Method::GET, "/watchdog") => {
+            Response::new("".into())
         },
         _ => {
             let mut res = Response::new(Body::empty());
