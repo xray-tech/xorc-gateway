@@ -4,10 +4,9 @@ use toml;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub postgres: PostgresConfig,
-    pub kafka: KafkaConfig,
-    pub sdk: SdkConfig,
-    pub log: LogConfig,
+    //pub postgres: PostgresConfig,
+    //pub kafka: KafkaConfig,
+    pub gateway: GatewayConfig,
 }
 
 impl Config {
@@ -29,15 +28,12 @@ impl Config {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct SdkConfig {
+pub struct GatewayConfig {
     pub secret: String,
+    pub listen_address: String,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct LogConfig {
-    pub host: String,
-}
-
+/*
 #[derive(Deserialize, Debug)]
 pub struct KafkaConfig {
     pub input_topic: String,
@@ -56,3 +52,5 @@ pub struct PostgresConfig {
     pub idle_timeout: u64,
     pub max_lifetime: u64,
 }
+
+*/

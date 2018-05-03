@@ -68,6 +68,7 @@ impl SDKEvent
     {
         for (key, value) in properties.iter() {
             let prefixed_key = format!("{}{}", prefix, key);
+
             match value {
                 &Value::String(ref s) => {
                     let mut ev = proto_events::SDKEventData_Property::new();

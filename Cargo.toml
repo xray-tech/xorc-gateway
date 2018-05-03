@@ -5,6 +5,10 @@ authors = ["Julius de Bruijn <julius.debruijn@360dialog.com>"]
 
 [dependencies]
 hyper = { git = "https://github.com/hyperium/hyper" }
+log = "0.4"
+env_logger = "0.5"
+lazy_static = "1.0"
+gelf = "0.2"
 pretty_env_logger = "0.2"
 ring = "0.12"
 serde = "1.0"
@@ -13,3 +17,8 @@ serde_derive = "1.0"
 toml = "0.4"
 protobuf = "1.4"
 chrono = "0.4"
+argparse = "0.2"
+futures = "0.1"
+base64 = "0.6"
+rand = "0.5.0-pre.1"
+uuid = { version = "0.6", features = ["serde", "v4"] }
