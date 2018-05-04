@@ -3,10 +3,7 @@ use hyper::HeaderMap;
 use ring::{aead, error};
 use rand::{RngCore, thread_rng};
 use std::env;
-use gelf::Level;
 use base64;
-
-use ::GLOG;
 
 lazy_static! {
     static ref SECRET: Vec<u8> =

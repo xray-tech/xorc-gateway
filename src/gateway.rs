@@ -68,7 +68,7 @@ impl Gateway {
                         return res
                     }
 
-                    if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
+                    if let Ok(_event) = serde_json::from_slice::<SDKEventBatch>(&body) {
                         let _ = GLOG.log_with_headers(
                             &format!("Received a batch of events"),
                             Level::Informational,
