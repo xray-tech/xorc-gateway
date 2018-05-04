@@ -115,12 +115,6 @@ impl<'a> From<&'a HeaderMap> for DeviceHeaders {
 
                 if let Ok(cleartext) = decryption {
                     device_headers.device_id.cleartext = Some(cleartext);
-                } else {
-                    let _ = GLOG.log_with_headers(
-                        "Invalid Device ID",
-                        Level::Error,
-                        &device_headers,
-                    );
                 };
             },
             _ => {
@@ -130,12 +124,6 @@ impl<'a> From<&'a HeaderMap> for DeviceHeaders {
                 let cleartext = Uuid::new_v4().hyphenated().to_string();
                 device_headers.device_id.ciphertext = Some(Self::encrypt_aead(&cleartext));
                 device_headers.device_id.cleartext = Some(cleartext);
-
-                let _ = GLOG.log_with_headers(
-                    "Created a new Device ID",
-                    Level::Informational,
-                    &device_headers,
-                );
             },
         };
 

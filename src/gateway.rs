@@ -31,14 +31,29 @@ pub struct Gateway {
 
 impl Gateway {
     fn service(req: Request<Body>) -> Box<Future<Item=Response<Body>, Error=hyper::Error> + Send>{
-        let device_headers = DeviceHeaders::from(req.headers());
-
         match (req.method(), req.uri().path()) {
             (&Method::OPTIONS, "/") => {
+                let _device_headers = DeviceHeaders::from(req.headers());
+
                 // TODO: CORS
                 Box::new(future::ok(Response::new("".into())))
             },
             (&Method::POST, "/") => {
+                let device_headers = DeviceHeaders::from(req.headers());
+
+                if device_headers.device_id.cleartext.is_none() {
+                    let _ = GLOG.log_with_headers(
+                        "Invalid Device ID",
+                        Level::Error,
+                        &device_headers,
+                    );
+
+                    let mut res = Response::new("Bad D360-Device-Id".into());
+                    *res.status_mut() = StatusCode::BAD_REQUEST;
+
+                    return Box::new(future::ok(res))
+                }
+
                 Box::new(req.into_body().concat2().map(move |body| {
                     if body.is_empty() {
                         let _ = GLOG.log_with_headers(
@@ -55,10 +70,11 @@ impl Gateway {
 
                     if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
                         let _ = GLOG.log_with_headers(
-                            &format!("OK: {:?}", event),
+                            &format!("Received a batch of events"),
                             Level::Informational,
                             &device_headers
                         );
+
                         Response::new("".into())
                     } else {
                         let _ = GLOG.log_with_headers(
