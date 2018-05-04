@@ -17,6 +17,7 @@ extern crate futures;
 extern crate base64;
 extern crate uuid;
 extern crate rand;
+extern crate http;
 
 mod headers;
 mod events;

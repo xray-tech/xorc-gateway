@@ -89,7 +89,7 @@ impl GelfLogger {
             msg.set_metadata("api_token", format!("{}", api_token))?;
         };
 
-        if let Some(ref encrypted) = headers.device_id.encrypted {
+        if let Some(ref encrypted) = headers.device_id.ciphertext {
             msg.set_metadata("encrypted_device_id", format!("{}", encrypted))?;
         };
 

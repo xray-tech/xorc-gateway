@@ -5,6 +5,7 @@ authors = ["Julius de Bruijn <julius.debruijn@360dialog.com>"]
 
 [dependencies]
 hyper = { git = "https://github.com/hyperium/hyper" }
+http = "0.1"
 log = "0.4"
 env_logger = "0.5"
 lazy_static = "1.0"
