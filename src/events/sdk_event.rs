@@ -54,7 +54,7 @@ impl Into<proto_events::SDKEventData> for SDKEvent {
 
 impl SDKEvent
 {
-    pub fn properties(&self) -> Vec<proto_events::SDKEventData_Property> {
+    fn properties(&self) -> Vec<proto_events::SDKEventData_Property> {
         let mut properties = Vec::new();
         Self::flatten_properties("", &self.properties, &mut properties);
 
@@ -101,10 +101,91 @@ impl SDKEvent
                     Self::flatten_properties(&prefix, map, &mut container);
                 },
                 other => {
-                    println!("JSON object of type {:?} not supported", other);
+                    warn!("JSON object of type {:?} not supported", other);
                 }
             };
         }
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use proto_events;
+    use serde_json;
+
+    #[test]
+    fn test_with_empty_properties() {
+        let json = json!({
+            "properties": {}
+        });
+
+        let event: SDKEvent = serde_json::from_value(json).unwrap();
+        let proto: proto_events::SDKEventData = event.into();
+
+        assert!(proto.get_properties().is_empty());
+    }
+
+    #[test]
+    fn test_with_string_property() {
+        let json = json!({
+            "properties": {
+                "foo": "bar",
+            }
+        });
+
+        let event: SDKEvent = serde_json::from_value(json).unwrap();
+        let proto: proto_events::SDKEventData = event.into();
+
+        assert_eq!("foo", proto.get_properties()[0].get_key());
+        assert_eq!("bar", proto.get_properties()[0].get_string_value());
+    }
+
+    #[test]
+    fn test_with_number_property() {
+        let json = json!({
+            "properties": {
+                "foo": 420,
+            }
+        });
+
+        let event: SDKEvent = serde_json::from_value(json).unwrap();
+        let proto: proto_events::SDKEventData = event.into();
+
+        assert_eq!("foo", proto.get_properties()[0].get_key());
+        assert_eq!(420.0, proto.get_properties()[0].get_number_value());
+    }
+
+    #[test]
+    fn test_with_bool_property() {
+        let json = json!({
+            "properties": {
+                "foo": true,
+            }
+        });
+
+        let event: SDKEvent = serde_json::from_value(json).unwrap();
+        let proto: proto_events::SDKEventData = event.into();
+
+        assert_eq!("foo", proto.get_properties()[0].get_key());
+        assert_eq!(true, proto.get_properties()[0].get_bool_value());
+    }
+
+    #[test]
+    fn test_with_object_property() {
+        let json = json!({
+            "properties": {
+                "foo": {
+                    "bar": "lol",
+                },
+            }
+        });
+
+        let event: SDKEvent = serde_json::from_value(json).unwrap();
+        let proto: proto_events::SDKEventData = event.into();
+
+        assert_eq!("foo__bar", proto.get_properties()[0].get_key());
+        assert_eq!("lol", proto.get_properties()[0].get_string_value());
+    }
+}

@@ -4,15 +4,6 @@ use std::env;
 use env_logger;
 use headers::DeviceHeaders;
 
-#[derive(Debug)]
-pub enum LogAction {
-    ConsumerCreate,
-    ConsumerRestart,
-    ConsumerStart,
-    ConsumerDelete,
-    NotificationResult,
-}
-
 pub struct GelfLogger {
     connection: Option<Logger>,
     filter: LevelFilter,

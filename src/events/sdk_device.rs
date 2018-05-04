@@ -131,3 +131,163 @@ impl Into<proto_events::Device> for SDKDevice {
         device
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use proto_events;
+    use serde_json;
+
+    #[test]
+    fn test_no_language_or_local_set() {
+        let device: SDKDevice = serde_json::from_str("{}").unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert!(!proto.has_language());
+    }
+
+    #[test]
+    fn test_no_language_or_locale_set() {
+        let device: SDKDevice = serde_json::from_str("{}").unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert!(!proto.has_language());
+    }
+
+    #[test]
+    fn test_language_set() {
+        let json = json!({
+            "language": "fi"
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!("fi", proto.get_language());
+    }
+
+    #[test]
+    fn test_locale_set() {
+        let json = json!({
+            "locale": "fi_FI"
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!("fi", proto.get_language());
+    }
+
+    #[test]
+    fn test_broken_locale_set() {
+        let json = json!({
+            "locale": "kulli"
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert!(!proto.has_language());
+    }
+
+    #[test]
+    fn test_no_h_set() {
+        let device: SDKDevice = serde_json::from_str("{}").unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!(-1, proto.get_h());
+    }
+
+    #[test]
+    fn test_h_set() {
+        let json = json!({
+            "h": 420
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!(420, proto.get_h());
+    }
+
+    #[test]
+    fn test_no_w_set() {
+        let device: SDKDevice = serde_json::from_str("{}").unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!(-1, proto.get_w());
+    }
+
+    #[test]
+    fn test_w_set() {
+        let json = json!({
+            "w": 715517
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!(715517, proto.get_w());
+    }
+
+    #[test]
+    fn test_no_ifa_tracking_enabled_set() {
+        let device: SDKDevice = serde_json::from_str("{}").unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!(false, proto.get_ifa_tracking_enabled());
+    }
+
+    #[test]
+    fn test_no_notification_registered_set() {
+        let device: SDKDevice = serde_json::from_str("{}").unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!(false, proto.get_notification_registered());
+    }
+
+    #[test]
+    fn test_no_os_name_set() {
+        let device: SDKDevice = serde_json::from_str("{}").unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!("", proto.get_platform());
+    }
+
+    #[test]
+    fn test_os_name_ios() {
+        let json = json!({
+            "os_name": "iOS"
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!("ios", proto.get_platform());
+    }
+
+    #[test]
+    fn test_os_name_iphone_os() {
+        let json = json!({
+            "os_name": "iPhone OS"
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!("ios", proto.get_platform());
+    }
+
+    #[test]
+    fn test_os_name_android() {
+        let json = json!({
+            "os_name": "Android"
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!("android", proto.get_platform());
+    }
+}

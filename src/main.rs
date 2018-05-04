@@ -1,6 +1,7 @@
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate log;
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate serde_json;
 
 extern crate hyper;
 extern crate pretty_env_logger;
@@ -8,7 +9,6 @@ extern crate gelf;
 extern crate env_logger;
 extern crate ring;
 extern crate serde;
-extern crate serde_json;
 extern crate protobuf;
 extern crate chrono;
 extern crate argparse;
