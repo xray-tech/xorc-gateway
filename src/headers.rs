@@ -148,7 +148,7 @@ mod tests {
         let ip = "1.1.1.1";
 
         header_map.insert(
-            "X-Real-IP",
+            "x-real-ip",
             HeaderValue::from_static(ip),
         );
 
@@ -171,7 +171,7 @@ mod tests {
         let token = "some-token";
 
         header_map.insert(
-            "D360-Api-Token",
+            "d360-api-token",
             HeaderValue::from_static(token),
         );
 

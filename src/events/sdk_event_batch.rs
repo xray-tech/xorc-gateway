@@ -5,9 +5,9 @@ use chrono::offset::Utc;
 #[derive(Deserialize, Debug)]
 pub struct SDKEventBatch
 {
-    environment: events::SDKEnvironment,
-    events: Vec<events::SDKEvent>,
-    device: events::SDKDevice,
+    pub environment: events::SDKEnvironment,
+    pub events: Vec<events::SDKEvent>,
+    pub device: events::SDKDevice,
 }
 
 impl Into<proto_events::SDKEventBatch> for SDKEventBatch {

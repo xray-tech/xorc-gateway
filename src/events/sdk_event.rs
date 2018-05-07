@@ -7,14 +7,22 @@ use serde_json::{
 #[derive(Deserialize, Debug)]
 pub struct SDKEvent
 {
-    pub id: Option<String>,
+    #[serde(default = "default_event_id")]
+    pub id: String,
+
+    #[serde(default)]
+    properties: Map<String, Value>,
+
     pub session_id: Option<String>,
     pub timestamp: Option<String>,
     pub name: Option<String>,
     pub external_user_id: Option<String>,
-    properties: Map<String, Value>,
     pub is_in_control_group: Option<i32>,
     pub reference_id: Option<String>,
+}
+
+fn default_event_id() -> String {
+    "0".to_string()
 }
 
 impl Into<proto_events::SDKEventData> for SDKEvent {
@@ -29,9 +37,8 @@ impl Into<proto_events::SDKEventData> for SDKEvent {
             }
         }
 
-        if let Some(id) = self.id {
-            ev.set_id(id);
-        }
+        ev.set_id(self.id);
+
         if let Some(session_id) = self.session_id {
             ev.set_session_id(session_id);
         }

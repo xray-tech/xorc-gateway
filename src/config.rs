@@ -29,7 +29,6 @@ impl Config {
 
 #[derive(Deserialize, Debug)]
 pub struct GatewayConfig {
-    pub secret: String,
     pub listen_address: String,
 }
 

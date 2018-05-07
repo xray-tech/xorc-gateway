@@ -21,7 +21,7 @@ use gelf::{
 
 use serde_json;
 use config::Config;
-use events::SDKEventBatch;
+use events::{SDKEventBatch, SDKResponse, EventResult, EventStatus};
 use headers::DeviceHeaders;
 use ::GLOG;
 
@@ -68,14 +68,24 @@ impl Gateway {
                         return res
                     }
 
-                    if let Ok(_event) = serde_json::from_slice::<SDKEventBatch>(&body) {
+                    if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
                         let _ = GLOG.log_with_headers(
                             &format!("Received a batch of events"),
                             Level::Informational,
                             &device_headers
                         );
 
-                        Response::new("".into())
+                        let results: Vec<EventResult> = event.events.iter().map(|e| {
+                            EventResult::register(
+                                &e.id,
+                                EventStatus::Success,
+                                &device_headers,
+                            )
+                        }).collect();
+
+                        let body = serde_json::to_string(&SDKResponse::from(results)).unwrap();
+
+                        Response::new(body.into())
                     } else {
                         let _ = GLOG.log_with_headers(
                             "Invalid JSON received",
