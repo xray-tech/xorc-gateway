@@ -9,7 +9,7 @@ use http::{
 };
 
 use hyper::{
-    Body, Method, Request, Response, Server, StatusCode, HeaderMap,
+    Body, Method, Request, Response, Server, StatusCode,
     service::service_fn,
     rt::Future,
     self,
@@ -87,13 +87,13 @@ impl Gateway {
     fn service(&self, req: Request<Body>) -> ResponseFuture {
         match (req.method(), req.uri().path()) {
             (&Method::OPTIONS, "/") => {
-                self.handle_options(req)
+                Box::new(self.handle_options(req))
             },
             (&Method::POST, "/") => {
                 self.handle_event(req)
             },
             (&Method::GET, "/watchdog") => {
-                self.handle_metrics()
+                Box::new(self.handle_metrics())
             },
             _ => {
                 let mut res = Response::new(Body::empty());
@@ -103,7 +103,7 @@ impl Gateway {
         }
     }
 
-    fn handle_metrics(&self) -> ResponseFuture {
+    fn handle_metrics(&self) -> impl Future<Item=Response<Body>, Error=hyper::Error> {
         let encoder = TextEncoder::new();
         let metric_families = prometheus::gather();
         let mut buffer = vec![];
@@ -122,10 +122,9 @@ impl Gateway {
         Box::new(future::ok(response))
     }
 
-    fn handle_options(&self, req: Request<Body>) -> ResponseFuture {
+    fn handle_options(&self, req: Request<Body>) -> impl Future<Item=Response<Body>, Error=hyper::Error> {
         let _device_headers = DeviceHeaders::from(req.headers());
 
-        // TODO: CORS
         Box::new(future::ok(Response::new("".into())))
     }
 

@@ -1,7 +1,10 @@
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate log;
 #[macro_use] extern crate lazy_static;
-#[macro_use] extern crate serde_json;
+
+#[allow(unused_imports)]
+#[macro_use]
+extern crate serde_json;
 
 extern crate hyper;
 extern crate pretty_env_logger;

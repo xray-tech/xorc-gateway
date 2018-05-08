@@ -57,7 +57,6 @@ impl From<Arc<Config>> for Cors {
             allowed_origins: allowed_origins,
             allowed_methods: config.cors.allowed_methods.clone(),
             allowed_headers: config.cors.allowed_headers.clone(),
-
         }
     }
 }
