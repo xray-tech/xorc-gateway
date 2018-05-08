@@ -67,6 +67,7 @@ mod tests {
             api_token: Some("token".to_string()),
             signature: Some("signature".to_string()),
             ip: Some("ip".to_string()),
+            origin: None,
         };
 
         let event_result = EventResult::register("123", EventStatus::Success, &headers);

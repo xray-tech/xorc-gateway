@@ -7,6 +7,8 @@ pub struct Config {
     //pub postgres: PostgresConfig,
     //pub kafka: KafkaConfig,
     pub gateway: GatewayConfig,
+    pub cors: CorsConfig,
+    pub origins: Vec<OriginConfig>
 }
 
 impl Config {
@@ -23,7 +25,7 @@ impl Config {
         file.read_to_string(&mut config_toml)
             .unwrap_or_else(|err| panic!("Error while reading config: [{}]", err));
 
-        toml::from_str(&config_toml).unwrap()
+        toml::from_str(&config_toml).unwrap_or_else(|err| panic!("Error while reading config: [{}]", err))
     }
 }
 
@@ -31,7 +33,19 @@ impl Config {
 pub struct GatewayConfig {
     pub address: String,
     pub threads: usize,
-    pub keep_alive: u64,
+    pub process_name_prefix: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct OriginConfig {
+    pub app_id: u32,
+    pub allowed: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CorsConfig {
+    pub allowed_methods: String,
+    pub allowed_headers: String,
 }
 
 /*

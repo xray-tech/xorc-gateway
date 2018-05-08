@@ -1,5 +1,24 @@
 use proto_events;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum Platform {
+    Ios,
+    Android,
+    Web,
+    Unknown
+}
+
+impl<'a> From<&'a Platform> for String {
+    fn from(platform: &'a Platform) -> String {
+        match platform {
+            &Platform::Ios => "ios".to_string(),
+            &Platform::Android => "android".to_string(),
+            &Platform::Web => "web".to_string(),
+            _ => String::new()
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct SDKDevice
 {
@@ -30,15 +49,19 @@ pub struct SDKDevice
 
 impl SDKDevice
 {
-    pub fn platform(&self) -> Option<&'static str>
+    pub fn platform(&self) -> Platform
     {
-        self.os_name.as_ref().map(|n| {
-            match n.as_ref() {
-                "iOS" | "iPhone OS" => "ios",
-                "Android" => "android",
-                _ => ""
+        match self.platform.as_ref().map(|x| &**x) {
+            Some("android") => Platform::Android,
+            Some("ios")     => Platform::Ios,
+            Some("web")     => Platform::Web,
+
+            _ => match self.os_name.as_ref().map(|x| &**x) {
+                Some("iOS") | Some("iPhone OS") => Platform::Ios,
+                Some("Android")                 => Platform::Android,
+                _                               => Platform::Unknown
             }
-        })
+        }
     }
 }
 
@@ -46,9 +69,7 @@ impl Into<proto_events::Device> for SDKDevice {
     fn into(self) -> proto_events::Device {
         let mut device = proto_events::Device::new();
 
-        if let Some(ref platform) = self.platform() {
-            device.set_platform(platform.to_string());
-        }
+        device.set_platform(String::from(&self.platform()));
 
         {
             let carrier = device.mut_carrier();
@@ -289,5 +310,17 @@ mod tests {
         let proto: proto_events::Device = device.into();
 
         assert_eq!("android", proto.get_platform());
+    }
+
+    #[test]
+    fn test_platform_web() {
+        let json = json!({
+            "platform": "web"
+        });
+
+        let device: SDKDevice = serde_json::from_value(json).unwrap();
+        let proto: proto_events::Device = device.into();
+
+        assert_eq!("web", proto.get_platform());
     }
 }

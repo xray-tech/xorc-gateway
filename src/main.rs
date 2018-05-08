@@ -20,6 +20,7 @@ extern crate rand;
 extern crate http;
 extern crate tokio;
 extern crate tokio_threadpool;
+extern crate prometheus;
 
 mod headers;
 mod events;
@@ -27,6 +28,7 @@ mod proto_events;
 mod gateway;
 mod config;
 mod logger;
+mod cors;
 
 use gateway::Gateway;
 use config::Config;

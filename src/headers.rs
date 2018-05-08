@@ -2,6 +2,7 @@ use uuid::Uuid;
 use hyper::HeaderMap;
 use ring::{aead, error};
 use rand::{RngCore, thread_rng};
+use http::{header::{self, AsHeaderName}};
 use std::env;
 use base64;
 
@@ -30,6 +31,7 @@ pub struct DeviceHeaders {
     pub device_id: DeviceId,
     pub signature: Option<String>,
     pub ip: Option<String>,
+    pub origin: Option<String>,
 }
 
 #[derive(Debug)]
@@ -39,7 +41,9 @@ pub struct DeviceId {
 }
 
 impl DeviceHeaders {
-    fn get_value(headers: &HeaderMap, key: &'static str) -> Option<String> {
+    fn get_value<K>(headers: &HeaderMap, key: K) -> Option<String>
+    where K: AsHeaderName
+    {
         headers
             .get(key)
             .and_then(|h| h.to_str().ok())
@@ -103,6 +107,7 @@ impl<'a> From<&'a HeaderMap> for DeviceHeaders {
             },
             signature: Self::get_value(headers, "D360-Signature"),
             ip: Self::get_value(headers, "X-Real-IP"),
+            origin: Self::get_value(headers, header::ORIGIN)
         };
 
         match Self::get_value(headers, "D360-Device-Id") {
@@ -201,6 +206,44 @@ mod tests {
         let device_headers = DeviceHeaders::from(&header_map);
 
         assert_eq!(device_headers.signature, Some(signature.to_string()));
+    }
+
+    #[test]
+    fn test_empty_origin() {
+        let header_map = HeaderMap::new();
+        let device_headers = DeviceHeaders::from(&header_map);
+
+        assert!(device_headers.origin.is_none());
+    }
+
+    #[test]
+    fn test_existing_origin() {
+        let mut header_map = HeaderMap::new();
+        let origin = "http://google.com";
+
+        header_map.insert(
+            "Origin",
+            HeaderValue::from_static(origin),
+        );
+
+        let device_headers = DeviceHeaders::from(&header_map);
+
+        assert_eq!(device_headers.origin, Some(origin.to_string()));
+    }
+
+    #[test]
+    fn test_lowercase_origin() {
+        let mut header_map = HeaderMap::new();
+        let origin = "http://google.com";
+
+        header_map.insert(
+            "origin",
+            HeaderValue::from_static(origin),
+        );
+
+        let device_headers = DeviceHeaders::from(&header_map);
+
+        assert_eq!(device_headers.origin, Some(origin.to_string()));
     }
 
     #[test]
