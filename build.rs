@@ -4,7 +4,7 @@ fn main() {
     Command::new("protoc")
         .args(&[
             "--rust_out",
-            "src/event/protobuf",
+            "src/proto_events",
             "--proto_path",
             "./third_party/events/schema/",
             "./third_party/events/schema/common/header.proto",

@@ -2,6 +2,7 @@
 name = "sdk-gateway"
 version = "0.1.0"
 authors = ["Julius de Bruijn <julius.debruijn@360dialog.com>"]
+build = "build.rs"
 
 [dependencies]
 hyper = { git = "https://github.com/hyperium/hyper" }
