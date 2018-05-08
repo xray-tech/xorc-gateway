@@ -18,6 +18,8 @@ extern crate base64;
 extern crate uuid;
 extern crate rand;
 extern crate http;
+extern crate tokio;
+extern crate tokio_threadpool;
 
 mod headers;
 mod events;

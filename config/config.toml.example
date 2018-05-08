@@ -1,3 +1,4 @@
 [gateway]
-secret = "81997e87beec092a1ba662511d9f7ff9db1fe20200f40368bed5a6c256fa6516"
-listen_address = "0.0.0.0:1337"
+address = "0.0.0.0:1337"
+threads = 4
+keep_alive = 2 # seconds

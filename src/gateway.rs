@@ -1,7 +1,7 @@
 use hyper::{
     Body, Method, Request, Response, Server, StatusCode,
     service::service_fn,
-    rt::{self, Future},
+    rt::Future,
     self,
 };
 
@@ -23,6 +23,8 @@ use serde_json;
 use config::Config;
 use events::{SDKEventBatch, SDKResponse, EventResult, EventStatus};
 use headers::DeviceHeaders;
+use tokio::runtime::{Builder as RuntimeBuilder};
+use tokio_threadpool;
 use ::GLOG;
 
 pub struct Gateway {
@@ -69,11 +71,13 @@ impl Gateway {
                     }
 
                     if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
+                        /*
                         let _ = GLOG.log_with_headers(
                             &format!("Received a batch of events"),
                             Level::Informational,
                             &device_headers
                         );
+                        */
 
                         let results: Vec<EventResult> = event.events.iter().map(|e| {
                             EventResult::register(
@@ -116,14 +120,26 @@ impl Gateway {
     }
 
     pub fn run(self) {
-        let mut addr_iter = self.config.gateway.listen_address.to_socket_addrs().unwrap();
+        let mut addr_iter = self.config.gateway.address.to_socket_addrs().unwrap();
         let addr = addr_iter.next().unwrap();
 
+        let mut threadpool_builder = tokio_threadpool::Builder::new();
+        threadpool_builder
+            .name_prefix("sdk-gateway-worker-")
+            .pool_size(4);
+
+        let mut runtime = RuntimeBuilder::new()
+            .threadpool_builder(threadpool_builder)
+            .build().unwrap();
+
         let server = Server::bind(&addr)
-            .serve(|| service_fn(Self::service))
+            .serve(|| service_fn(|req: Request<Body>| {
+                Self::service(req)
+            }))
             .map_err(|e| println!("server error: {}", e));
 
         println!("Listening on http://{}", &addr);
-        rt::run(server);
+        runtime.spawn(server);
+        runtime.shutdown_on_idle().wait().unwrap();
     }
 }

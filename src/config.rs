@@ -29,7 +29,9 @@ impl Config {
 
 #[derive(Deserialize, Debug)]
 pub struct GatewayConfig {
-    pub listen_address: String,
+    pub address: String,
+    pub threads: usize,
+    pub keep_alive: u64,
 }
 
 /*
