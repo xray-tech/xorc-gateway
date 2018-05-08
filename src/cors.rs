@@ -13,6 +13,7 @@ pub struct Cors {
     allowed_origins: HashMap<String, HashSet<String>>
 }
 
+
 impl Cors {
     pub fn headers_for(&self, app_id: &str, origin: &str) -> Option<Vec<(HeaderName, HeaderValue)>> {
         match self.allowed_origins.get(app_id) {
@@ -37,6 +38,23 @@ impl Cors {
             },
             _ => None
         }
+    }
+
+    pub fn wildcard_headers(&self) -> Vec<(HeaderName, HeaderValue)> {
+        vec![
+            (
+                header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                "*".parse().unwrap()
+            ),
+            (
+                header::ACCESS_CONTROL_ALLOW_METHODS,
+                self.allowed_methods.parse().unwrap()
+            ),
+            (
+                header::ACCESS_CONTROL_ALLOW_HEADERS,
+                self.allowed_headers.parse().unwrap()
+            ),
+        ]
     }
 }
 

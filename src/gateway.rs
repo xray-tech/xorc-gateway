@@ -87,7 +87,7 @@ impl Gateway {
     fn service(&self, req: Request<Body>) -> ResponseFuture {
         match (req.method(), req.uri().path()) {
             (&Method::OPTIONS, "/") => {
-                Box::new(self.handle_options(req))
+                Box::new(future::ok(self.handle_options()))
             },
             (&Method::POST, "/") => {
                 self.handle_event(req)
@@ -122,39 +122,47 @@ impl Gateway {
         Box::new(future::ok(response))
     }
 
-    fn handle_options(&self, req: Request<Body>) -> impl Future<Item=Response<Body>, Error=hyper::Error> {
-        let _device_headers = DeviceHeaders::from(req.headers());
+    fn handle_options(&self) -> Response<Body> {
+        let mut builder = Response::builder();
 
-        Box::new(future::ok(Response::new("".into())))
+        for (k, v) in self.cors.wildcard_headers().into_iter() {
+            builder.header(k, v);
+        }
+
+        builder.status(StatusCode::OK);
+
+
+        builder.body("".into()).unwrap()
     }
 
     fn handle_event(&self, req: Request<Body>) -> ResponseFuture {
+        let mut builder = Response::builder();
         let device_headers = DeviceHeaders::from(req.headers());
 
         if device_headers.device_id.cleartext.is_none() {
-            let res = Self::respond_error(
+            let _ = GLOG.log_with_headers(
                 "Bad D360-Device-Id",
-                &device_headers,
-                StatusCode::BAD_REQUEST,
+                Level::Error,
+                &device_headers
             );
-
-            return Box::new(future::ok(res))
+            builder.status(StatusCode::BAD_REQUEST);
+            return Box::new(future::ok(builder.body("Bad D360-Device-Id".into()).unwrap()))
         }
 
         let cors = self.cors.clone();
 
         Box::new(req.into_body().concat2().map(move |body| {
             if body.is_empty() {
-                return Self::respond_error(
+                let _ = GLOG.log_with_headers(
                     "Empty payload",
-                    &device_headers,
-                    StatusCode::BAD_REQUEST,
-                )
+                    Level::Error,
+                    &device_headers
+                );
+                builder.status(StatusCode::BAD_REQUEST);
+                return builder.body("Empty payload".into()).unwrap()
             }
 
             if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
-                let mut builder = Response::builder();
-
                 if event.device.platform() == Platform::Web {
                     let cors_headers = device_headers.origin.as_ref()
                         .and_then(|o| {
@@ -166,11 +174,13 @@ impl Gateway {
                             builder.header(k, v);
                         }
                     } else {
-                        return Self::respond_error(
+                        let _ = GLOG.log_with_headers(
                             "Unknown Origin",
-                            &device_headers,
-                            StatusCode::FORBIDDEN,
-                        )
+                            Level::Error,
+                            &device_headers
+                        );
+                        builder.status(StatusCode::FORBIDDEN);
+                        return builder.body("Unknown Origin".into()).unwrap()
                     }
                 }
 
@@ -186,30 +196,14 @@ impl Gateway {
 
                 builder.body(body.into()).unwrap()
             } else {
-                Self::respond_error(
+                let _ = GLOG.log_with_headers(
                     "Invalid payload",
-                    &device_headers,
-                    StatusCode::BAD_REQUEST,
-                )
+                    Level::Error,
+                    &device_headers
+                );
+                builder.status(StatusCode::BAD_REQUEST);
+                builder.body("Empty payload".into()).unwrap()
             }
         }))
-    }
-
-    fn respond_error(
-        error: &'static str,
-        device_headers: &DeviceHeaders,
-        status_code: StatusCode,
-    ) -> Response<Body>
-    {
-        let _ = GLOG.log_with_headers(
-            error,
-            Level::Error,
-            device_headers
-        );
-
-        let mut res = Response::new(error.into());
-        *res.status_mut() = status_code;
-
-        return res
     }
 }
