@@ -1,4 +1,11 @@
-use proto_events;
+use proto_events::{
+    events::{
+        self,
+        sdk_event_data::Property,
+        sdk_event_data::property
+    }
+};
+
 use serde_json::{
     value::Value,
     Map,
@@ -25,43 +32,24 @@ fn default_event_id() -> String {
     "0".to_string()
 }
 
-impl Into<proto_events::SDKEventData> for SDKEvent {
-    fn into(self) -> proto_events::SDKEventData {
-        let mut ev = proto_events::SDKEventData::new();
-
-        {
-            let properties = ev.mut_properties();
-
-            for property in self.properties().into_iter() {
-                properties.push(property);
-            }
+impl Into<events::SdkEventData> for SDKEvent {
+    fn into(self) -> events::SdkEventData {
+        events::SdkEventData {
+            properties: self.properties(),
+            id: Some(self.id),
+            session_id: self.session_id,
+            timestamp: self.timestamp,
+            name: self.name,
+            external_user_id: self.external_user_id,
+            reference_id: self.reference_id,
+            ..Default::default()
         }
-
-        ev.set_id(self.id);
-
-        if let Some(session_id) = self.session_id {
-            ev.set_session_id(session_id);
-        }
-        if let Some(timestamp) = self.timestamp {
-            ev.set_timestamp(timestamp);
-        }
-        if let Some(name) = self.name {
-            ev.set_name(name);
-        }
-        if let Some(external_user_id) = self.external_user_id {
-            ev.set_external_user_id(external_user_id);
-        }
-        if let Some(reference_id) = self.reference_id {
-            ev.set_reference_id(reference_id);
-        }
-
-        ev
     }
 }
 
 impl SDKEvent
 {
-    fn properties(&self) -> Vec<proto_events::SDKEventData_Property> {
+    fn properties(&self) -> Vec<Property> {
         let mut properties = Vec::new();
         Self::flatten_properties("", &self.properties, &mut properties);
 
@@ -71,23 +59,23 @@ impl SDKEvent
     fn flatten_properties(
         prefix: &str,
         properties: &Map<String, Value>,
-        mut container: &mut Vec<proto_events::SDKEventData_Property>,)
+        mut container: &mut Vec<Property>,)
     {
         for (key, value) in properties.iter() {
             let prefixed_key = format!("{}{}", prefix, key);
 
             match value {
                 &Value::String(ref s) => {
-                    let mut ev = proto_events::SDKEventData_Property::new();
-                    ev.set_key(prefixed_key);
-                    ev.set_string_value(s.to_string());
-                    container.push(ev);
+                    container.push(Property {
+                        key: prefixed_key,
+                        type_: Some(property::Type::StringValue(s.to_string()))
+                    });
                 },
                 &Value::Bool(b) => {
-                    let mut ev = proto_events::SDKEventData_Property::new();
-                    ev.set_key(prefixed_key);
-                    ev.set_bool_value(b);
-                    container.push(ev);
+                    container.push(Property {
+                        key: prefixed_key,
+                        type_: Some(property::Type::BoolValue(b))
+                    });
                 },
                 &Value::Number(ref n) => {
                     let p_value = if let Some(i) = n.as_i64() {
@@ -98,10 +86,10 @@ impl SDKEvent
                         n.as_f64().unwrap()
                     };
 
-                    let mut ev = proto_events::SDKEventData_Property::new();
-                    ev.set_key(prefixed_key);
-                    ev.set_number_value(p_value);
-                    container.push(ev);
+                    container.push(Property {
+                        key: prefixed_key,
+                        type_: Some(property::Type::NumberValue(p_value))
+                    });
                 },
                 &Value::Object(ref map) => {
                     let prefix = format!("{}{}__", prefix, prefixed_key);
@@ -119,7 +107,13 @@ impl SDKEvent
 mod tests {
     use super::*;
 
-    use proto_events;
+    use proto_events::{
+        events::{
+            self,
+            sdk_event_data::property
+        }
+    };
+
     use serde_json;
 
     #[test]
@@ -129,9 +123,9 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: proto_events::SDKEventData = event.into();
+        let proto: events::SdkEventData = event.into();
 
-        assert!(proto.get_properties().is_empty());
+        assert!(proto.properties.is_empty());
     }
 
     #[test]
@@ -143,10 +137,13 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: proto_events::SDKEventData = event.into();
+        let proto: events::SdkEventData = event.into();
 
-        assert_eq!("foo", proto.get_properties()[0].get_key());
-        assert_eq!("bar", proto.get_properties()[0].get_string_value());
+        assert_eq!("foo", proto.properties[0].key);
+        assert_eq!(
+            Some(property::Type::StringValue(String::from("bar"))),
+            proto.properties[0].type_
+        );
     }
 
     #[test]
@@ -158,10 +155,13 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: proto_events::SDKEventData = event.into();
+        let proto: events::SdkEventData = event.into();
 
-        assert_eq!("foo", proto.get_properties()[0].get_key());
-        assert_eq!(420.0, proto.get_properties()[0].get_number_value());
+        assert_eq!("foo", proto.properties[0].key);
+        assert_eq!(
+            Some(property::Type::NumberValue(420.0)),
+            proto.properties[0].type_
+        );
     }
 
     #[test]
@@ -173,10 +173,13 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: proto_events::SDKEventData = event.into();
+        let proto: events::SdkEventData = event.into();
 
-        assert_eq!("foo", proto.get_properties()[0].get_key());
-        assert_eq!(true, proto.get_properties()[0].get_bool_value());
+        assert_eq!("foo", proto.properties[0].key);
+        assert_eq!(
+            Some(property::Type::BoolValue(true)),
+            proto.properties[0].type_
+        );
     }
 
     #[test]
@@ -190,9 +193,12 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: proto_events::SDKEventData = event.into();
+        let proto: events::SdkEventData = event.into();
 
-        assert_eq!("foo__bar", proto.get_properties()[0].get_key());
-        assert_eq!("lol", proto.get_properties()[0].get_string_value());
+        assert_eq!("foo__bar", proto.properties[0].key);
+        assert_eq!(
+            Some(property::Type::StringValue(String::from("lol"))),
+            proto.properties[0].type_,
+        );
     }
 }

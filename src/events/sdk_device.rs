@@ -1,4 +1,4 @@
-use proto_events;
+use proto_events::common;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Platform {
@@ -65,91 +65,53 @@ impl SDKDevice
     }
 }
 
-impl Into<proto_events::Device> for SDKDevice {
-    fn into(self) -> proto_events::Device {
-        let mut device = proto_events::Device::new();
+impl Into<common::Device> for SDKDevice {
+    fn into(self) -> common::Device {
+        let mut dev = common::Device {
+            platform: Some(String::from(&self.platform())),
+            locale: self.locale,
+            timezone: self.time_zone,
+            manufacturer: self.manufacturer,
+            model: self.model,
+            osv: self.os_version,
+            os: self.os_name,
+            connectiontype: self.network_connection_type,
+            ifa: self.ifa,
+            idfv: self.idfv,
+            notification_types: self.notification_types,
+            orientation: self.orientation,
+            h: self.h.or(Some(-1)),
+            w: self.w.or(Some(-1)),
+            ifa_tracking_enabled: Some(self.ifa_tracking_enabled),
+            notification_registered: Some(self.notification_registered),
 
-        device.set_platform(String::from(&self.platform()));
+            carrier: Some(common::Carrier {
+                name: self.carrier_name,
+                mcc: self.carrier_country,
+                ..Default::default()
+            }),
 
-        {
-            let carrier = device.mut_carrier();
-            if let Some(ref carrier_name) = self.carrier_name {
-                carrier.set_name(carrier_name.to_string());
-            }
-            if let Some(ref carrier_country) = self.carrier_country {
-                carrier.set_mcc(carrier_country.to_string());
-            }
-        }
+            browser: Some(common::Browser {
+                name: self.browser_name,
+                ua: self.browser_ua,
+                version: self.browser_version,
+                ..Default::default()
+            }),
 
-        {
-            let browser = device.mut_browser();
-            if let Some(browser_name) = self.browser_name {
-                browser.set_name(browser_name);
-            }
-            if let Some(browser_ua) = self.browser_ua {
-                browser.set_ua(browser_ua);
-            }
-            if let Some(browser_version) = self.browser_version {
-                browser.set_version(browser_version);
-            }
-        }
+            ..Default::default()
+        };
 
         if let Some(language) = self.language {
-            device.set_language(language);
-        } else if let Some(ref locale) = self.locale {
-            if let Some(index) = locale.find("_") {
-                device.set_language(locale[0..index].to_string());
-            };
-        };
-
-        if let Some(locale) = self.locale {
-            device.set_locale(locale)
-        };
-        if let Some(time_zone) = self.time_zone {
-            device.set_timezone(time_zone);
-        }
-        if let Some(manufacturer) = self.manufacturer {
-            device.set_manufacturer(manufacturer);
-        }
-        if let Some(model) = self.model {
-            device.set_model(model);
-        }
-        if let Some(osv) = self.os_version {
-            device.set_osv(osv);
-        }
-        if let Some(os) = self.os_name {
-            device.set_os(os);
-        }
-        if let Some(connectiontype) = self.network_connection_type {
-            device.set_connectiontype(connectiontype);
-        }
-        if let Some(ifa) = self.ifa {
-            device.set_ifa(ifa);
-        }
-        if let Some(idfv) = self.idfv {
-            device.set_idfv(idfv);
-        }
-        if let Some(notification_types) = self.notification_types {
-            device.set_notification_types(notification_types);
-        }
-        if let Some(orientation) = self.orientation {
-            device.set_orientation(orientation);
-        }
-        if let Some(h) = self.h {
-            device.set_h(h);
-        } else {
-            device.set_h(-1);
-        }
-        if let Some(w) = self.w {
-            device.set_w(w);
-        } else {
-            device.set_w(-1);
+            dev.language = Some(language);
+        } else if let Some(ref locale) = dev.locale {
+            dev.language = locale
+                .find("_")
+                .map(|index| {
+                    locale[0..index].to_string()
+                });
         }
 
-        device.set_ifa_tracking_enabled(self.ifa_tracking_enabled);
-        device.set_notification_registered(self.notification_registered);
-
-        device
+        dev
     }
 }
 
@@ -157,23 +119,23 @@ impl Into<proto_events::Device> for SDKDevice {
 mod tests {
     use super::*;
 
-    use proto_events;
+    use proto_events::common;
     use serde_json;
 
     #[test]
     fn test_no_language_or_local_set() {
         let device: SDKDevice = serde_json::from_str("{}").unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert!(!proto.has_language());
+        assert!(proto.language.is_none());
     }
 
     #[test]
     fn test_no_language_or_locale_set() {
         let device: SDKDevice = serde_json::from_str("{}").unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert!(!proto.has_language());
+        assert!(proto.language.is_none());
     }
 
     #[test]
@@ -183,9 +145,12 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!("fi", proto.get_language());
+        assert_eq!(
+            Some(String::from("fi")),
+            proto.language
+        );
     }
 
     #[test]
@@ -195,9 +160,12 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!("fi", proto.get_language());
+        assert_eq!(
+            Some(String::from("fi")),
+            proto.language
+        );
     }
 
     #[test]
@@ -207,17 +175,17 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert!(!proto.has_language());
+        assert!(proto.language.is_none());
     }
 
     #[test]
     fn test_no_h_set() {
         let device: SDKDevice = serde_json::from_str("{}").unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!(-1, proto.get_h());
+        assert_eq!(Some(-1), proto.h);
     }
 
     #[test]
@@ -227,17 +195,17 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!(420, proto.get_h());
+        assert_eq!(Some(420), proto.h);
     }
 
     #[test]
     fn test_no_w_set() {
         let device: SDKDevice = serde_json::from_str("{}").unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!(-1, proto.get_w());
+        assert_eq!(Some(-1), proto.w);
     }
 
     #[test]
@@ -247,33 +215,33 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!(715517, proto.get_w());
+        assert_eq!(Some(715517), proto.w);
     }
 
     #[test]
     fn test_no_ifa_tracking_enabled_set() {
         let device: SDKDevice = serde_json::from_str("{}").unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!(false, proto.get_ifa_tracking_enabled());
+        assert_eq!(Some(false), proto.ifa_tracking_enabled);
     }
 
     #[test]
     fn test_no_notification_registered_set() {
         let device: SDKDevice = serde_json::from_str("{}").unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!(false, proto.get_notification_registered());
+        assert_eq!(Some(false), proto.notification_registered);
     }
 
     #[test]
     fn test_no_os_name_set() {
         let device: SDKDevice = serde_json::from_str("{}").unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!("", proto.get_platform());
+        assert_eq!(Some(String::new()), proto.platform);
     }
 
     #[test]
@@ -283,9 +251,9 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!("ios", proto.get_platform());
+        assert_eq!(Some(String::from("ios")), proto.platform);
     }
 
     #[test]
@@ -295,9 +263,9 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!("ios", proto.get_platform());
+        assert_eq!(Some(String::from("ios")), proto.platform);
     }
 
     #[test]
@@ -307,9 +275,9 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!("android", proto.get_platform());
+        assert_eq!(Some(String::from("android")), proto.platform);
     }
 
     #[test]
@@ -319,8 +287,8 @@ mod tests {
         });
 
         let device: SDKDevice = serde_json::from_value(json).unwrap();
-        let proto: proto_events::Device = device.into();
+        let proto: common::Device = device.into();
 
-        assert_eq!("web", proto.get_platform());
+        assert_eq!(Some(String::from("web")), proto.platform);
     }
 }
