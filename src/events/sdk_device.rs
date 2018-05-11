@@ -11,9 +11,9 @@ pub enum Platform {
 impl<'a> From<&'a Platform> for String {
     fn from(platform: &'a Platform) -> String {
         match platform {
-            &Platform::Ios => "ios".to_string(),
-            &Platform::Android => "android".to_string(),
-            &Platform::Web => "web".to_string(),
+            Platform::Ios => "ios".to_string(),
+            Platform::Android => "android".to_string(),
+            Platform::Web => "web".to_string(),
             _ => String::new()
         }
     }

@@ -3,6 +3,7 @@ use gelf::{Error, Logger, Message, UdpBackend, Level};
 use std::env;
 use env_logger;
 use headers::DeviceHeaders;
+use app_registry::Application;
 
 pub struct GelfLogger {
     connection: Option<Logger>,
@@ -72,7 +73,13 @@ impl GelfLogger {
         }
     }
 
-    pub fn log_with_headers(&self, title: &str, level: Level, headers: &DeviceHeaders) -> Result<(), Error> {
+    pub fn log_with_headers(
+        &self,
+        title: &str,
+        level: Level,
+        headers: &DeviceHeaders
+    ) -> Result<(), Error>
+    {
         let mut msg = Message::new(title.to_string());
         msg.set_level(level);
 
@@ -95,6 +102,41 @@ impl GelfLogger {
         if let Some(ref ip) = headers.ip {
             msg.set_metadata("ip", format!("{}", ip))?;
         };
+
+        self.log_message(msg);
+
+        Ok(())
+    }
+
+    pub fn log_app_update(&self, app: &Application) -> Result<(), Error> {
+        let mut msg = Message::new("Application data update".to_string());
+        msg.set_level(Level::Informational);
+
+        msg.set_metadata("app_id", format!("{}", app.id))?;
+
+        if app.token.is_some() {
+            msg.set_metadata("has_token", "true".to_string())?;
+        } else {
+            msg.set_metadata("has_token", "false".to_string())?;
+        }
+
+        if app.ios_secret.is_some() {
+            msg.set_metadata("ios_enabled", "true".to_string())?;
+        } else {
+            msg.set_metadata("ios_enabled", "false".to_string())?;
+        }
+
+        if app.android_secret.is_some() {
+            msg.set_metadata("android_enabled", "true".to_string())?;
+        } else {
+            msg.set_metadata("android_enabled", "false".to_string())?;
+        }
+
+        if app.web_secret.is_some() {
+            msg.set_metadata("web_enabled", "true".to_string())?;
+        } else {
+            msg.set_metadata("web_enabled", "false".to_string())?;
+        }
 
         self.log_message(msg);
 

@@ -2,6 +2,8 @@
 address = "0.0.0.0:1337"
 threads = 4
 process_name_prefix = "sdk-gateway-worker-"
+default_token = "T0BdxB0O/+eRZhN6REPmbYpTqjxCTtUgirbW7ABJ8renKaxoGbHFsOX2iLFhuWaJbZHzmTnvKv15fv/87ceIQQ=="
+allow_empty_signature = false
 
 [cors]
 allowed_methods = "HERP,DERP"
@@ -14,3 +16,10 @@ allowed = ["https://www.google.fi"]
 [[origins]]
 app_id = 2
 allowed = ["http://localhost:5401", "https://reddit.com"]
+
+[[test_apps]]
+app_id = 1
+token = "46732a28cd445366c6c8dcbd57500af4e69597c8ebe224634d6ccab812275c9c"
+secret_android = "d685e53ae50c945e5ae4f36170d7213360a25ed91b91a647574aa384d2b6f901"
+secret_ios = "1b66af517dd60807aeff8b4582d202ef500085bc0cec92bc3e67f0c58d6203b5"
+secret_web = "4c553960fdc2a82f90b84f6ef188e836818fcee2c43a6c32bd6c91f41772657f"

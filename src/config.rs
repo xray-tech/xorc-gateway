@@ -4,11 +4,12 @@ use toml;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    //pub postgres: PostgresConfig,
     //pub kafka: KafkaConfig,
     pub gateway: GatewayConfig,
     pub cors: Option<CorsConfig>,
-    pub origins: Vec<OriginConfig>
+    pub origins: Vec<OriginConfig>,
+    pub postgres: Option<PostgresConfig>,
+    pub test_apps: Vec<TestAppConfig>,
 }
 
 impl Config {
@@ -34,6 +35,8 @@ pub struct GatewayConfig {
     pub address: String,
     pub threads: usize,
     pub process_name_prefix: String,
+    pub default_token: String,
+    pub allow_empty_signature: bool,
 }
 
 #[derive(Deserialize, Debug)]
@@ -43,9 +46,27 @@ pub struct OriginConfig {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct TestAppConfig {
+    pub app_id: i32,
+    pub token: Option<String>,
+    pub secret_ios: Option<String>,
+    pub secret_android: Option<String>,
+    pub secret_web: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct CorsConfig {
     pub allowed_methods: String,
     pub allowed_headers: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PostgresConfig {
+    pub uri: String,
+    pub pool_size: u32,
+    pub min_idle: u32,
+    pub idle_timeout: u64,
+    pub max_lifetime: u64,
 }
 
 /*
@@ -58,14 +79,4 @@ pub struct KafkaConfig {
     pub group_id: String,
     pub brokers: String,
 }
-
-#[derive(Deserialize, Debug)]
-pub struct PostgresConfig {
-    pub uri: String,
-    pub pool_size: u32,
-    pub min_idle: u32,
-    pub idle_timeout: u64,
-    pub max_lifetime: u64,
-}
-
 */

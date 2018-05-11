@@ -4,9 +4,7 @@ use prometheus::{
     TextEncoder
 };
 
-use http::{
-    header,
-};
+use http::header;
 
 use hyper::{
     Body, Method, Request, Response, Server, StatusCode,
@@ -23,39 +21,65 @@ use std::{
 use futures::{
     future,
     Stream,
-};
-
-use gelf::{
-    Level,
+    sync::oneshot,
 };
 
 use serde_json;
 use config::Config;
+use error::{self, Error};
 use events::{SDKEventBatch, SDKResponse, EventResult, EventStatus, Platform};
 use headers::DeviceHeaders;
 use tokio::runtime::{Builder as RuntimeBuilder};
 use tokio_threadpool;
+use app_registry::AppRegistry;
 use cors::Cors;
-use ::GLOG;
 
 pub struct Gateway {
     config: Arc<Config>,
     cors: Arc<Option<Cors>>,
+    app_registry: Arc<AppRegistry>,
 }
 
 type ResponseFuture = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send + 'static>;
 
 impl Gateway {
-    pub fn new(config: Arc<Config>) -> Gateway {
+    fn service(&self, req: Request<Body>) -> ResponseFuture {
+        match (req.method(), req.uri().path()) {
+            // SDK OPTIONS request
+            (&Method::OPTIONS, "/") => {
+                Box::new(future::ok(self.handle_options()))
+            },
+            // SDK events main path
+            (&Method::POST, "/") => {
+                self.handle_event(req)
+            },
+            // Prometheus metrics
+            (&Method::GET, "/watchdog") => {
+                Box::new(self.handle_metrics())
+            },
+            _ => {
+                let mut res = Response::new(Body::empty());
+                *res.status_mut() = StatusCode::NOT_FOUND;
+                Box::new(future::ok(res))
+            }
+        }
+    }
+
+    pub fn new(
+        config: Arc<Config>,
+        app_registry: Arc<AppRegistry>
+    ) -> Gateway
+    {
         let cors = Arc::new(Cors::new(config.clone()));
 
         Gateway {
             config,
             cors,
+            app_registry,
         }
     }
 
-    pub fn run(self) {
+    pub fn run(self, rx: oneshot::Receiver<()>) {
         let mut addr_iter = self.config.gateway.address.to_socket_addrs().unwrap();
         let addr = addr_iter.next().unwrap();
 
@@ -80,27 +104,8 @@ impl Gateway {
             .map_err(|e| println!("server error: {}", e));
 
         println!("Listening on http://{}", &addr);
-        runtime.spawn(server);
+        runtime.spawn(server.select2(rx).then(move |_| Ok(())));
         runtime.shutdown_on_idle().wait().unwrap();
-    }
-
-    fn service(&self, req: Request<Body>) -> ResponseFuture {
-        match (req.method(), req.uri().path()) {
-            (&Method::OPTIONS, "/") => {
-                Box::new(future::ok(self.handle_options()))
-            },
-            (&Method::POST, "/") => {
-                self.handle_event(req)
-            },
-            (&Method::GET, "/watchdog") => {
-                Box::new(self.handle_metrics())
-            },
-            _ => {
-                let mut res = Response::new(Body::empty());
-                *res.status_mut() = StatusCode::NOT_FOUND;
-                Box::new(future::ok(res))
-            }
-        }
     }
 
     fn handle_metrics(&self) -> impl Future<Item=Response<Body>, Error=hyper::Error> {
@@ -140,31 +145,16 @@ impl Gateway {
         let device_headers = DeviceHeaders::from(req.headers());
 
         if device_headers.device_id.cleartext.is_none() {
-            let _ = GLOG.log_with_headers(
-                "Bad D360-Device-Id",
-                Level::Error,
-                &device_headers
-            );
-            builder.status(StatusCode::BAD_REQUEST);
-            return Box::new(future::ok(builder.body("Bad D360-Device-Id".into()).unwrap()))
+            return Box::new(future::ok(error::bad_device_id(&device_headers, builder)))
         }
 
         let cors = self.cors.clone();
+        let app_registry = self.app_registry.clone();
 
         Box::new(req.into_body().concat2().map(move |body| {
-            if body.is_empty() {
-                let _ = GLOG.log_with_headers(
-                    "Empty payload",
-                    Level::Error,
-                    &device_headers
-                );
-                builder.status(StatusCode::BAD_REQUEST);
-                return builder.body("Empty payload".into()).unwrap()
-            }
-
             if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
-                match *cors {
-                    Some(ref cors) if event.device.platform() == Platform::Web => {
+                if let Some(ref cors) = *cors {
+                    if event.device.platform() == Platform::Web {
                         let cors_headers = device_headers.origin.as_ref()
                             .and_then(|o| {
                                 cors.headers_for(&event.environment.app_id, &o)
@@ -175,37 +165,42 @@ impl Gateway {
                                 builder.header(k, v);
                             }
                         } else {
-                            let _ = GLOG.log_with_headers(
-                                "Unknown Origin",
-                                Level::Error,
-                                &device_headers
-                            );
-                            builder.status(StatusCode::FORBIDDEN);
-                            return builder.body("Unknown Origin".into()).unwrap()
+                            return error::unknown_origin(&device_headers, builder)
                         }
-                    },
-                    _ => ()
+                    }
                 }
 
-                let results: Vec<EventResult> = event.events.iter().map(|e| {
-                    EventResult::register(
-                        &e.id,
-                        EventStatus::Success,
-                        &device_headers,
-                    )
-                }).collect();
-
-                let body = serde_json::to_string(&SDKResponse::from(results)).unwrap();
-
-                builder.body(body.into()).unwrap()
-            } else {
-                let _ = GLOG.log_with_headers(
-                    "Invalid payload",
-                    Level::Error,
-                    &device_headers
+                let validation = app_registry.validate(
+                    &event.environment.app_id,
+                    &device_headers,
+                    &event.device.platform(),
+                    &body,
                 );
-                builder.status(StatusCode::BAD_REQUEST);
-                builder.body("Empty payload".into()).unwrap()
+
+                match validation
+                {
+                    Err(Error::AppDoesNotExist)  => error::unknown_app(&device_headers, builder),
+                    Err(Error::MissingToken)     => error::missing_token(&device_headers, builder),
+                    Err(Error::MissingSignature) => error::missing_signature(&device_headers, builder),
+                    Err(Error::InvalidSignature) => error::invalid_signature(&device_headers, builder),
+                    Err(Error::InvalidToken)     => error::invalid_token(&device_headers, builder),
+                    Ok(()) => {
+                        let results: Vec<EventResult> = event.events.iter().map(|e| {
+                            EventResult::register(
+                                &e.id,
+                                EventStatus::Success,
+                                &device_headers,
+                            )
+                        }).collect();
+
+                        let body = serde_json::to_string(&SDKResponse::from(results)).unwrap();
+
+                        builder.body(body.into()).unwrap()
+                    },
+                }
+
+            } else {
+                error::invalid_payload(&device_headers, builder)
             }
         }))
     }

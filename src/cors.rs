@@ -36,7 +36,12 @@ impl Cors {
         })
     }
 
-    pub fn headers_for(&self, app_id: &str, origin: &str) -> Option<Vec<(HeaderName, HeaderValue)>> {
+    pub fn headers_for(
+        &self,
+        app_id: &str,
+        origin: &str
+    ) -> Option<Vec<(HeaderName, HeaderValue)>>
+    {
         match self.allowed_origins.get(app_id) {
             Some(app_origins) if app_origins.contains(origin)  => {
                 let mut headers = Vec::new();
