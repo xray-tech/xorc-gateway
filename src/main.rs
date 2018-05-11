@@ -64,7 +64,7 @@ fn main() {
         ap.parse_args_or_exit();
     }
 
-    let config = Arc::new(Config::parse(config_file_location));
+    let config = Arc::new(Config::parse(&config_file_location));
     let gateway = Gateway::new(config.clone());
     gateway.run()
 }

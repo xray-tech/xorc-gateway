@@ -7,12 +7,12 @@ pub struct Config {
     //pub postgres: PostgresConfig,
     //pub kafka: KafkaConfig,
     pub gateway: GatewayConfig,
-    pub cors: CorsConfig,
+    pub cors: Option<CorsConfig>,
     pub origins: Vec<OriginConfig>
 }
 
 impl Config {
-    pub fn parse(path: String) -> Config {
+    pub fn parse(path: &str) -> Config {
         let mut config_toml = String::new();
 
         let mut file = match File::open(&path) {

@@ -1,0 +1,16 @@
+[gateway]
+address = "0.0.0.0:1337"
+threads = 4
+process_name_prefix = "sdk-gateway-worker-"
+
+[cors]
+allowed_methods = "HERP,DERP"
+allowed_headers = "Content-Type, Content-Length"
+
+[[origins]]
+app_id = 1
+allowed = ["https://www.google.fi"]
+
+[[origins]]
+app_id = 2
+allowed = ["http://localhost:5401", "https://reddit.com"]

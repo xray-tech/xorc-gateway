@@ -40,14 +40,14 @@ use ::GLOG;
 
 pub struct Gateway {
     config: Arc<Config>,
-    cors: Arc<Cors>,
+    cors: Arc<Option<Cors>>,
 }
 
 type ResponseFuture = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send + 'static>;
 
 impl Gateway {
     pub fn new(config: Arc<Config>) -> Gateway {
-        let cors = Arc::new(Cors::from(config.clone()));
+        let cors = Arc::new(Cors::new(config.clone()));
 
         Gateway {
             config,
@@ -124,13 +124,13 @@ impl Gateway {
 
     fn handle_options(&self) -> Response<Body> {
         let mut builder = Response::builder();
-
-        for (k, v) in self.cors.wildcard_headers().into_iter() {
-            builder.header(k, v);
-        }
-
         builder.status(StatusCode::OK);
 
+        if let Some(ref cors) = *self.cors {
+            for (k, v) in cors.wildcard_headers().into_iter() {
+                builder.header(k, v);
+            }
+        }
 
         builder.body("".into()).unwrap()
     }
@@ -163,25 +163,28 @@ impl Gateway {
             }
 
             if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
-                if event.device.platform() == Platform::Web {
-                    let cors_headers = device_headers.origin.as_ref()
-                        .and_then(|o| {
-                            cors.headers_for(&event.environment.app_id, &o)
-                        });
+                match *cors {
+                    Some(ref cors) if event.device.platform() == Platform::Web => {
+                        let cors_headers = device_headers.origin.as_ref()
+                            .and_then(|o| {
+                                cors.headers_for(&event.environment.app_id, &o)
+                            });
 
-                    if let Some(headers) = cors_headers {
-                        for (k, v) in headers.into_iter() {
-                            builder.header(k, v);
+                        if let Some(headers) = cors_headers {
+                            for (k, v) in headers.into_iter() {
+                                builder.header(k, v);
+                            }
+                        } else {
+                            let _ = GLOG.log_with_headers(
+                                "Unknown Origin",
+                                Level::Error,
+                                &device_headers
+                            );
+                            builder.status(StatusCode::FORBIDDEN);
+                            return builder.body("Unknown Origin".into()).unwrap()
                         }
-                    } else {
-                        let _ = GLOG.log_with_headers(
-                            "Unknown Origin",
-                            Level::Error,
-                            &device_headers
-                        );
-                        builder.status(StatusCode::FORBIDDEN);
-                        return builder.body("Unknown Origin".into()).unwrap()
-                    }
+                    },
+                    _ => ()
                 }
 
                 let results: Vec<EventResult> = event.events.iter().map(|e| {
