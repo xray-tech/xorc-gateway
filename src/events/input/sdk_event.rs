@@ -65,19 +65,19 @@ impl SDKEvent
             let prefixed_key = format!("{}{}", prefix, key);
 
             match value {
-                &Value::String(ref s) => {
+                Value::String(s) => {
                     container.push(Property {
                         key: prefixed_key,
                         type_: Some(property::Type::StringValue(s.to_string()))
                     });
                 },
-                &Value::Bool(b) => {
+                Value::Bool(b) => {
                     container.push(Property {
                         key: prefixed_key,
-                        type_: Some(property::Type::BoolValue(b))
+                        type_: Some(property::Type::BoolValue(*b))
                     });
                 },
-                &Value::Number(ref n) => {
+                Value::Number(n) => {
                     let p_value = if let Some(i) = n.as_i64() {
                         i as f64
                     } else if let Some(i) = n.as_u64() {
@@ -91,7 +91,7 @@ impl SDKEvent
                         type_: Some(property::Type::NumberValue(p_value))
                     });
                 },
-                &Value::Object(ref map) => {
+                Value::Object(map) => {
                     let prefix = format!("{}{}__", prefix, prefixed_key);
                     Self::flatten_properties(&prefix, map, &mut container);
                 },
