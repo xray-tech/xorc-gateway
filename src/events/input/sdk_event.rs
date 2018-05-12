@@ -34,7 +34,7 @@ fn default_event_id() -> String {
 
 impl Into<output::events::SdkEventData> for SDKEvent {
     fn into(self) -> output::events::SdkEventData {
-        output::events::SdkEventData {
+        let mut ev = output::events::SdkEventData {
             properties: self.properties(),
             id: Some(self.id),
             session_id: self.session_id,
@@ -43,7 +43,15 @@ impl Into<output::events::SdkEventData> for SDKEvent {
             external_user_id: self.external_user_id,
             reference_id: self.reference_id,
             ..Default::default()
+        };
+
+        // HACK to workaround bug MOBI-661
+        if ev.name.as_ref().map(|e| e.as_ref()) == Some("d360_deeplink_opened") {
+            ev.name = Some(String::from("d360_report_deeplink_opened"));
         }
+        // end HACK
+
+        ev
     }
 }
 
