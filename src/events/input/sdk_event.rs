@@ -110,7 +110,6 @@ mod tests {
     use events::output::{
         self,
         events::{
-            sdk_event_data::Property,
             sdk_event_data::property
         }
     };
@@ -124,7 +123,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: output::SdkEventData = event.into();
+        let proto: output::events::SdkEventData = event.into();
 
         assert!(proto.properties.is_empty());
     }
@@ -138,7 +137,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: output::SdkEventData = event.into();
+        let proto: output::events::SdkEventData = event.into();
 
         assert_eq!("foo", proto.properties[0].key);
         assert_eq!(
@@ -156,7 +155,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: output::SdkEventData = event.into();
+        let proto: output::events::SdkEventData = event.into();
 
         assert_eq!("foo", proto.properties[0].key);
         assert_eq!(
@@ -174,7 +173,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: output::SdkEventData = event.into();
+        let proto: output::events::SdkEventData = event.into();
 
         assert_eq!("foo", proto.properties[0].key);
         assert_eq!(
@@ -194,7 +193,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: output::SdkEventData = event.into();
+        let proto: output::events::SdkEventData = event.into();
 
         assert_eq!("foo__bar", proto.properties[0].key);
         assert_eq!(

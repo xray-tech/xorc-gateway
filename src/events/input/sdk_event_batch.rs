@@ -65,7 +65,7 @@ mod tests {
         });
 
         let device: SDKEventBatch = serde_json::from_value(json).unwrap();
-        let proto: output::SdkEventBatch = device.into();
+        let proto: output::events::SdkEventBatch = device.into();
         let header = proto.header;
 
         assert_eq!(String::from("420"), header.source);

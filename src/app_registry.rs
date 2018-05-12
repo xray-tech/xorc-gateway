@@ -13,7 +13,7 @@ use base64;
 use config::Config;
 use ring::{hmac, digest};
 use error::Error;
-use events::input::Platform;
+use events::input;
 use headers::DeviceHeaders;
 use crossbeam::sync::ArcCell;
 use r2d2;
@@ -128,7 +128,7 @@ impl AppRegistry {
         &self,
         app_id: &str,
         device_headers: &DeviceHeaders,
-        platform: &Platform,
+        platform: &input::Platform,
         raw_data: &[u8],
     ) -> Result<(), Error>
     {
@@ -161,10 +161,10 @@ impl AppRegistry {
             .ok_or(Error::MissingSignature)?;
 
         let platform_key = match platform {
-            Platform::Ios     => app.ios_secret.as_ref(),
-            Platform::Android => app.android_secret.as_ref(),
-            Platform::Web     => app.web_secret.as_ref(),
-            _                 => None,
+            input::Platform::Ios     => app.ios_secret.as_ref(),
+            input::Platform::Android => app.android_secret.as_ref(),
+            input::Platform::Web     => app.web_secret.as_ref(),
+            _                        => None,
         }.ok_or(Error::AppDoesNotExist)?;
 
         let decoded_signature = base64::decode(signature.as_bytes())
@@ -284,7 +284,7 @@ mod tests {
     use hyper::HeaderMap;
     use http::header::HeaderValue;
     use headers::DeviceHeaders;
-    use events::Platform;
+    use events::input::Platform;
 
     const TOKEN: &'static str =
         "46732a28cd445366c6c8dcbd57500af4e69597c8ebe224634d6ccab812275c9c";
