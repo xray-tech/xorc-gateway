@@ -43,7 +43,6 @@ extern crate chan_signal;
 mod error;
 mod headers;
 mod events;
-mod proto_events;
 mod gateway;
 mod config;
 mod logger;

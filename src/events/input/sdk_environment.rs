@@ -1,4 +1,4 @@
-use proto_events::events;
+use events::output;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct SDKEnvironment {
@@ -10,9 +10,9 @@ pub struct SDKEnvironment {
     pub app_instance_id: Option<String>,
 }
 
-impl Into<events::SdkEnvironment> for SDKEnvironment {
-    fn into(self) -> events::SdkEnvironment {
-        events::SdkEnvironment {
+impl Into<output::events::SdkEnvironment> for SDKEnvironment {
+    fn into(self) -> output::events::SdkEnvironment {
+        output::events::SdkEnvironment {
             app_id: Some(self.app_id),
             sdk_version: self.sdk_version,
             app_version: self.app_version,

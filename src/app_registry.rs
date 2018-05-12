@@ -13,7 +13,7 @@ use base64;
 use config::Config;
 use ring::{hmac, digest};
 use error::Error;
-use events::Platform;
+use events::input::Platform;
 use headers::DeviceHeaders;
 use crossbeam::sync::ArcCell;
 use r2d2;

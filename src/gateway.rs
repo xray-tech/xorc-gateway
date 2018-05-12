@@ -27,7 +27,7 @@ use futures::{
 use serde_json;
 use config::Config;
 use error::{self, Error};
-use events::{SDKEventBatch, SDKResponse, EventResult, EventStatus, Platform};
+use events::input::{SDKEventBatch, SDKResponse, EventResult, EventStatus, Platform};
 use headers::DeviceHeaders;
 use tokio::runtime::{Builder as RuntimeBuilder};
 use tokio_threadpool;

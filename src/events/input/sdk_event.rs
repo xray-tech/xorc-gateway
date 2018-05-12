@@ -1,6 +1,6 @@
-use proto_events::{
+use events::output::{
+    self,
     events::{
-        self,
         sdk_event_data::Property,
         sdk_event_data::property
     }
@@ -32,9 +32,9 @@ fn default_event_id() -> String {
     "0".to_string()
 }
 
-impl Into<events::SdkEventData> for SDKEvent {
-    fn into(self) -> events::SdkEventData {
-        events::SdkEventData {
+impl Into<output::events::SdkEventData> for SDKEvent {
+    fn into(self) -> output::events::SdkEventData {
+        output::events::SdkEventData {
             properties: self.properties(),
             id: Some(self.id),
             session_id: self.session_id,
@@ -107,9 +107,10 @@ impl SDKEvent
 mod tests {
     use super::*;
 
-    use proto_events::{
+    use events::output::{
+        self,
         events::{
-            self,
+            sdk_event_data::Property,
             sdk_event_data::property
         }
     };
@@ -123,7 +124,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: events::SdkEventData = event.into();
+        let proto: output::SdkEventData = event.into();
 
         assert!(proto.properties.is_empty());
     }
@@ -137,7 +138,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: events::SdkEventData = event.into();
+        let proto: output::SdkEventData = event.into();
 
         assert_eq!("foo", proto.properties[0].key);
         assert_eq!(
@@ -155,7 +156,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: events::SdkEventData = event.into();
+        let proto: output::SdkEventData = event.into();
 
         assert_eq!("foo", proto.properties[0].key);
         assert_eq!(
@@ -173,7 +174,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: events::SdkEventData = event.into();
+        let proto: output::SdkEventData = event.into();
 
         assert_eq!("foo", proto.properties[0].key);
         assert_eq!(
@@ -193,7 +194,7 @@ mod tests {
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
-        let proto: events::SdkEventData = event.into();
+        let proto: output::SdkEventData = event.into();
 
         assert_eq!("foo__bar", proto.properties[0].key);
         assert_eq!(

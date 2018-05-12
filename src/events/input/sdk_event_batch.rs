@@ -1,19 +1,18 @@
-use proto_events::{events, common};
-use events as json_events;
+use events::{input, output};
 use chrono::offset::Utc;
 
 #[derive(Deserialize, Debug)]
 pub struct SDKEventBatch
 {
-    pub environment: json_events::SDKEnvironment,
-    pub events: Vec<json_events::SDKEvent>,
-    pub device: json_events::SDKDevice,
+    pub environment: input::SDKEnvironment,
+    pub events: Vec<input::SDKEvent>,
+    pub device: input::SDKDevice,
 }
 
-impl Into<events::SdkEventBatch> for SDKEventBatch {
-    fn into(self) -> events::SdkEventBatch {
-        events::SdkEventBatch {
-            header: common::Header {
+impl Into<output::events::SdkEventBatch> for SDKEventBatch {
+    fn into(self) -> output::events::SdkEventBatch {
+        output::events::SdkEventBatch {
+            header: output::common::Header {
                 created_at: Utc::now().timestamp_millis(),
                 source: self.environment.app_id.clone(),
                 type_: Some(String::from("events.SDKEventBatch")),
@@ -32,7 +31,7 @@ impl Into<events::SdkEventBatch> for SDKEventBatch {
 mod tests {
     use super::*;
 
-    use proto_events::events;
+    use events::output;
     use serde_json;
 
     #[test]
@@ -44,7 +43,7 @@ mod tests {
         });
 
         let device: SDKEventBatch = serde_json::from_value(json).unwrap();
-        let proto: events::SdkEventBatch = device.into();
+        let proto: output::events::SdkEventBatch = device.into();
         let header = proto.header;
 
         assert_eq!(header.source, String::new());
@@ -66,7 +65,7 @@ mod tests {
         });
 
         let device: SDKEventBatch = serde_json::from_value(json).unwrap();
-        let proto: events::SdkEventBatch = device.into();
+        let proto: output::SdkEventBatch = device.into();
         let header = proto.header;
 
         assert_eq!(String::from("420"), header.source);

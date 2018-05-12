@@ -1,4 +1,4 @@
-use proto_events::common;
+use events::output::common;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Platform {
@@ -119,7 +119,7 @@ impl Into<common::Device> for SDKDevice {
 mod tests {
     use super::*;
 
-    use proto_events::common;
+    use events::output::common;
     use serde_json;
 
     #[test]
