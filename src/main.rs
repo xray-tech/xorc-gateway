@@ -13,6 +13,8 @@ extern crate prost_derive;
 extern crate indoc;
 #[macro_use]
 extern crate chan;
+#[macro_use]
+extern crate aerospike;
 
 extern crate hex;
 extern crate crossbeam;
@@ -40,6 +42,7 @@ extern crate r2d2_postgres;
 extern crate postgres;
 extern crate chan_signal;
 
+mod entity_storage;
 mod error;
 mod headers;
 mod events;
@@ -48,8 +51,10 @@ mod config;
 mod logger;
 mod cors;
 mod app_registry;
+mod encryption;
 
 use gateway::Gateway;
+use entity_storage::EntityStorage;
 use app_registry::AppRegistry;
 use config::Config;
 use chan_signal::{notify, Signal};
@@ -91,6 +96,11 @@ fn main() {
     let control = Arc::new(AtomicBool::new(true));
     let config = Arc::new(Config::parse(&config_file_location));
     let app_registry = Arc::new(AppRegistry::new(config.clone()));
+
+    let entity_storage = Arc::new(
+        config.aerospike.as_ref().map(|ref as_config| EntityStorage::new(as_config))
+    );
+
     let mut threads: Vec<JoinHandle<_>> = Vec::new();
     let (server_tx, server_rx) = oneshot::channel();
 
@@ -105,7 +115,12 @@ fn main() {
     });
 
     threads.push({
-        let gateway = Gateway::new(config.clone(), app_registry.clone());
+        let gateway = Gateway::new(
+            config.clone(),
+            app_registry.clone(),
+            entity_storage.clone(),
+        );
+
         thread::spawn(move || {
             info!("Starting the SDK gateway thread...");
             gateway.run(server_rx);

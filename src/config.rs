@@ -9,6 +9,7 @@ pub struct Config {
     pub cors: Option<CorsConfig>,
     pub origins: Vec<OriginConfig>,
     pub postgres: Option<PostgresConfig>,
+    pub aerospike: Option<AerospikeConfig>,
     pub test_apps: Vec<TestAppConfig>,
 }
 
@@ -67,6 +68,12 @@ pub struct PostgresConfig {
     pub min_idle: u32,
     pub idle_timeout: u64,
     pub max_lifetime: u64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AerospikeConfig {
+    pub nodes: String,
+    pub namespace: String,
 }
 
 /*

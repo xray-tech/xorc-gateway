@@ -128,14 +128,12 @@ pub fn bad_device_id(
 }
 
 pub fn invalid_payload(
-    device_headers: &DeviceHeaders,
     mut builder: response::Builder
 ) -> Response<Body>
 {
-    let _ = GLOG.log_with_headers(
+    let _ = GLOG.log_without_headers(
         "Invalid payload",
         Level::Error,
-        &device_headers
     );
     builder.status(StatusCode::BAD_REQUEST);
     builder.body("Empty payload".into()).unwrap()

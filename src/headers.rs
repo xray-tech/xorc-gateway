@@ -1,29 +1,8 @@
 use uuid::Uuid;
 use hyper::HeaderMap;
-use ring::{aead, error};
 use rand::{RngCore, thread_rng};
 use http::{header::{self, AsHeaderName}};
-use std::env;
-use base64;
-
-lazy_static! {
-    static ref SECRET: Vec<u8> =
-        if let Ok(ref secret) = env::var("SECRET") {
-            base64::decode_config(secret, base64::URL_SAFE_NO_PAD).unwrap()
-        } else {
-            warn!("No secret given, please set it in SECRET in base64 format (url safe, no pad)");
-
-            vec![129, 164, 171, 19, 88, 96, 172, 49, 218, 122, 106, 79, 226, 124,
-                 112, 233, 172, 165, 64, 54, 31, 139, 249, 226, 199, 148, 8, 27,
-                 76, 91, 164, 146]
-        };
-
-    static ref OPENING_KEY: aead::OpeningKey =
-        aead::OpeningKey::new(&aead::AES_256_GCM, &SECRET).unwrap();
-
-    static ref SEALING_KEY: aead::SealingKey =
-        aead::SealingKey::new(&aead::AES_256_GCM, &SECRET).unwrap();
-}
+use encryption::{Ciphertext, Cleartext};
 
 #[derive(Debug)]
 pub struct DeviceHeaders {
@@ -36,13 +15,17 @@ pub struct DeviceHeaders {
 
 #[derive(Debug)]
 pub struct DeviceId {
-    pub ciphertext: Option<String>,
-    pub cleartext: Option<String>,
+    pub ciphertext: Option<Ciphertext>,
+    pub cleartext: Option<Cleartext>,
 }
 
 impl DeviceHeaders {
-    fn get_value<K>(headers: &HeaderMap, key: K) -> Option<String>
-    where K: AsHeaderName
+    fn get_value<K>(
+        headers: &HeaderMap,
+        key: K
+    ) -> Option<String>
+    where
+        K: AsHeaderName
     {
         headers
             .get(key)
@@ -50,86 +33,64 @@ impl DeviceHeaders {
             .map(|s| String::from(s))
     }
 
-    fn encrypt_aead(cleartext: &str) -> String {
-        let mut nonce = [0u8; 12];
-        thread_rng().fill_bytes(&mut nonce);
+    fn create_new_id() -> DeviceId {
+        let mut uuid = [0u8; 16];
+        thread_rng().fill_bytes(&mut uuid);
 
-        let mut ciphertext = [0u8; 52];
+        let cleartext = Cleartext::from(
+            Uuid::new_v4().hyphenated().to_string()
+        );
 
-        for (i, c) in cleartext.as_bytes().iter().enumerate() {
-            ciphertext[i] = *c;
+        let ciphertext = Ciphertext::encrypt(&cleartext);
+
+        DeviceId {
+            ciphertext: Some(ciphertext),
+            cleartext: Some(cleartext),
         }
-
-        aead::seal_in_place(
-            &SEALING_KEY,
-            &nonce,
-            &[],
-            &mut ciphertext,
-            16,
-        ).unwrap();
-
-        let mut payload = [0u8; 64];
-
-        for (i, c) in nonce.iter().enumerate() {
-            payload[i] = *c;
-        }
-
-        for (i, c) in ciphertext.iter().enumerate() {
-            payload[i + 12] = *c;
-        }
-
-        base64::encode(payload.as_ref())
     }
 
-    fn decrypt_aead(ciphertext: &str) -> Result<String, error::Unspecified> {
-        let mut decoded = base64::decode(ciphertext).map_err(|_| error::Unspecified)?;
-        let (nonce, mut cipher) = decoded.split_at_mut(12);
-
-        let decrypted_content = aead::open_in_place(
-            &OPENING_KEY,
-            &nonce,
-            &[],
-            0,
-            &mut cipher,
-        )?;
-
-        Ok(String::from_utf8_lossy(&decrypted_content).into())
-    }
-}
-
-impl<'a> From<&'a HeaderMap> for DeviceHeaders {
-    fn from(headers: &HeaderMap) -> DeviceHeaders {
-        let mut device_headers = DeviceHeaders {
-            api_token: Self::get_value(headers, "D360-Api-Token"),
-            device_id: DeviceId {
-                ciphertext: None,
-                cleartext: None,
-            },
-            signature: Self::get_value(headers, "D360-Signature"),
-            ip: Self::get_value(headers, "X-Real-IP"),
-            origin: Self::get_value(headers, header::ORIGIN)
-        };
-
-        match Self::get_value(headers, "D360-Device-Id") {
+    pub fn new<F>(
+        headers: &HeaderMap,
+        fetch_device_id: F,
+    ) -> DeviceHeaders
+    where
+        F: FnOnce() -> Option<String>
+    {
+        let device_id = match Self::get_value(&headers, "D360-Device-Id") {
             Some(ciphertext) => {
-                let decryption = Self::decrypt_aead(&ciphertext);
-                device_headers.device_id.ciphertext = Some(ciphertext);
+                let ciphertext = Ciphertext::from(ciphertext);
+                let cleartext = Cleartext::decrypt(&ciphertext);
 
-                if let Ok(cleartext) = decryption {
-                    device_headers.device_id.cleartext = Some(cleartext);
-                };
-            },
+                DeviceId {
+                    ciphertext: Some(ciphertext),
+                    cleartext: cleartext.ok(),
+                }
+            }
             _ => {
-                let mut uuid = [0u8; 16];
-                thread_rng().fill_bytes(&mut uuid);
+                match fetch_device_id() {
+                    Some(entity_id) => {
+                        let cleartext = Cleartext::from(entity_id);
+                        let ciphertext = Ciphertext::encrypt(&cleartext);
 
-                let cleartext = Uuid::new_v4().hyphenated().to_string();
-                device_headers.device_id.ciphertext = Some(Self::encrypt_aead(&cleartext));
-                device_headers.device_id.cleartext = Some(cleartext);
-            },
+                        DeviceId {
+                            ciphertext: Some(ciphertext),
+                            cleartext: Some(cleartext),
+                        }
+                    },
+                    _ => {
+                        Self::create_new_id()
+                    }
+                }
+            }
         };
 
-        device_headers
+        DeviceHeaders {
+            api_token: Self::get_value(&headers, "D360-Api-Token"),
+            device_id: device_id,
+            signature: Self::get_value(&headers, "D360-Signature"),
+            ip: Self::get_value(&headers, "X-Real-IP"),
+            origin: Self::get_value(&headers, header::ORIGIN)
+        }
     }
 }
 
@@ -142,7 +103,7 @@ mod tests {
     #[test]
     fn test_empty_ip_address() {
         let header_map = HeaderMap::new();
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert!(device_headers.ip.is_none());
     }
@@ -157,7 +118,7 @@ mod tests {
             HeaderValue::from_static(ip),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(device_headers.ip, Some(ip.to_string()));
     }
@@ -165,7 +126,7 @@ mod tests {
     #[test]
     fn test_empty_api_token() {
         let header_map = HeaderMap::new();
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert!(device_headers.api_token.is_none());
     }
@@ -180,7 +141,7 @@ mod tests {
             HeaderValue::from_static(token),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(device_headers.api_token, Some(token.to_string()));
     }
@@ -188,7 +149,7 @@ mod tests {
     #[test]
     fn test_empty_signature() {
         let header_map = HeaderMap::new();
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert!(device_headers.signature.is_none());
     }
@@ -203,7 +164,7 @@ mod tests {
             HeaderValue::from_static(signature),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(device_headers.signature, Some(signature.to_string()));
     }
@@ -211,7 +172,7 @@ mod tests {
     #[test]
     fn test_empty_origin() {
         let header_map = HeaderMap::new();
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert!(device_headers.origin.is_none());
     }
@@ -226,7 +187,7 @@ mod tests {
             HeaderValue::from_static(origin),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(device_headers.origin, Some(origin.to_string()));
     }
@@ -241,7 +202,7 @@ mod tests {
             HeaderValue::from_static(origin),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(device_headers.origin, Some(origin.to_string()));
     }
@@ -249,11 +210,22 @@ mod tests {
     #[test]
     fn test_empty_device_id() {
         let header_map = HeaderMap::new();
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let device_id = device_headers.device_id;
 
         assert!(device_id.ciphertext.is_some());
         assert!(device_id.cleartext.is_some());
+    }
+
+    #[test]
+    fn test_empty_device_id_with_storage() {
+        let header_map = HeaderMap::new();
+        let device_headers = DeviceHeaders::new(&header_map, || Some("foobar".to_string()));
+        let device_id = device_headers.device_id;
+        let cleartext = Cleartext::from("foobar");
+
+        assert!(device_id.ciphertext.is_some());
+        assert_eq!(device_id.cleartext, Some(cleartext));
     }
 
     #[test]
@@ -267,11 +239,11 @@ mod tests {
             HeaderValue::from_static(cipher),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let device_id = device_headers.device_id;
 
-        assert_eq!(device_id.ciphertext, Some(cipher.to_string()));
-        assert_eq!(device_id.cleartext, Some(clear.to_string()));
+        assert_eq!(device_id.ciphertext, Some(Ciphertext::from(cipher)));
+        assert_eq!(device_id.cleartext, Some(Cleartext::from(clear)));
     }
 
     #[test]
@@ -284,10 +256,10 @@ mod tests {
             HeaderValue::from_static(cipher),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let device_id = device_headers.device_id;
 
-        assert_eq!(device_id.ciphertext, Some(cipher.to_string()));
+        assert_eq!(device_id.ciphertext, Some(Ciphertext::from(cipher)));
         assert!(device_id.cleartext.is_none());
     }
 }

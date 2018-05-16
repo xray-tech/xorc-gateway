@@ -36,6 +36,7 @@ r2d2 = "0.8"
 r2d2_postgres = "0.14"
 indoc = "0.2"
 crossbeam = "0.3"
+aerospike = "0.2"
 
 [build-dependencies]
 prost-build = "0.3"

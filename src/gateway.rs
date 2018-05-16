@@ -4,12 +4,11 @@ use prometheus::{
     TextEncoder
 };
 
-use http::header;
+use http::{header, HeaderMap};
 
 use hyper::{
     Body, Method, Request, Response, Server, StatusCode,
     service::service_fn,
-    rt::Future,
     self,
 };
 
@@ -19,25 +18,39 @@ use std::{
 };
 
 use futures::{
-    future,
+    future::self,
+    Future,
     Stream,
     sync::oneshot,
+};
+
+use events::{
+    input::{
+        SDKEventBatch,
+        SDKResponse,
+        EventResult,
+        EventStatus,
+        Platform,
+    },
+};
+use tokio_threadpool::{
+    self,
 };
 
 use serde_json;
 use config::Config;
 use error::{self, Error};
-use events::input::{SDKEventBatch, SDKResponse, EventResult, EventStatus, Platform};
 use headers::DeviceHeaders;
 use tokio::runtime::{Builder as RuntimeBuilder};
-use tokio_threadpool;
 use app_registry::AppRegistry;
+use entity_storage::EntityStorage;
 use cors::Cors;
 
 pub struct Gateway {
     config: Arc<Config>,
     cors: Arc<Option<Cors>>,
     app_registry: Arc<AppRegistry>,
+    entity_storage: Arc<Option<EntityStorage>>,
 }
 
 type ResponseFuture = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send + 'static>;
@@ -51,7 +64,7 @@ impl Gateway {
             },
             // SDK events main path
             (&Method::POST, "/") => {
-                self.handle_event(req)
+                Box::new(self.handle_event(req))
             },
             // Prometheus metrics
             (&Method::GET, "/watchdog") => {
@@ -67,7 +80,8 @@ impl Gateway {
 
     pub fn new(
         config: Arc<Config>,
-        app_registry: Arc<AppRegistry>
+        app_registry: Arc<AppRegistry>,
+        entity_storage: Arc<Option<EntityStorage>>,
     ) -> Gateway
     {
         let cors = Arc::new(Cors::new(config.clone()));
@@ -76,6 +90,7 @@ impl Gateway {
             config,
             cors,
             app_registry,
+            entity_storage,
         }
     }
 
@@ -124,7 +139,7 @@ impl Gateway {
 
         let response = builder.body(buffer.into()).unwrap();
 
-        Box::new(future::ok(response))
+        future::ok(response)
     }
 
     fn handle_options(&self) -> Response<Body> {
@@ -140,19 +155,50 @@ impl Gateway {
         builder.body("".into()).unwrap()
     }
 
-    fn handle_event(&self, req: Request<Body>) -> ResponseFuture {
-        let mut builder = Response::builder();
-        let device_headers = DeviceHeaders::from(req.headers());
-
-        if device_headers.device_id.cleartext.is_none() {
-            return Box::new(future::ok(error::bad_device_id(&device_headers, builder)))
+    fn get_device_headers(
+        event: &SDKEventBatch,
+        header_map: &HeaderMap,
+        entity_storage: Arc<Option<EntityStorage>>,
+    ) -> DeviceHeaders
+    {
+        match *entity_storage {
+            Some(ref entity_storage) => {
+                DeviceHeaders::new(
+                    header_map,
+                    || entity_storage.get_id_for_ifa(
+                        &event.environment.app_id,
+                        &event.device,
+                    )
+                )
+            },
+            _ => {
+                DeviceHeaders::new(
+                    header_map,
+                    || None,
+                )
+            }
         }
+    }
 
+    fn handle_event(
+        &self,
+        req: Request<Body>
+    ) -> impl Future<Item=Response<Body>, Error=hyper::Error>
+    {
+        let mut builder = Response::builder();
         let cors = self.cors.clone();
         let app_registry = self.app_registry.clone();
+        let entity_storage = self.entity_storage.clone();
+        let (head, body) = req.into_parts();
 
-        Box::new(req.into_body().concat2().map(move |body| {
-            if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
+        body.concat2().map(move |ref body| {
+            if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body).map(|e| Arc::new(e)) {
+                let device_headers = Self::get_device_headers(&event, &head.headers, entity_storage);
+
+                if device_headers.device_id.cleartext.is_none() {
+                    return error::bad_device_id(&device_headers, builder)
+                }
+
                 if let Some(ref cors) = *cors {
                     if event.device.platform() == Platform::Web {
                         let cors_headers = device_headers.origin.as_ref()
@@ -198,10 +244,9 @@ impl Gateway {
                         builder.body(body.into()).unwrap()
                     },
                 }
-
             } else {
-                error::invalid_payload(&device_headers, builder)
+                error::invalid_payload(builder)
             }
-        }))
+        })
     }
 }

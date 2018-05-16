@@ -55,6 +55,15 @@ lazy_static! {
 }
 
 impl AppRegistry {
+    /// Caches application authentication information either from a database or
+    /// staticly from a config file. If the loaded configuration holds
+    /// `[postgres]` section, the system loads the data from PostgreSQL crm
+    /// database, from the applications, ios_applications, android_applications
+    /// and web_applications tables. Check the schema from `crm_api` project.
+    ///
+    /// Alternatively one can have `[[test_apps]]` with `app_id`, `token`,
+    /// `secret_ios`, `secret_android` and `secret_web`. If any of these is
+    /// missing, the system will not allow requests for those platforms.
     pub fn new(config: Arc<Config>) -> AppRegistry {
         if let Some(psql_config) = config.clone().postgres.as_ref() {
             info!("Apps loaded form PostgreSQL CRM database.");
@@ -124,6 +133,14 @@ impl AppRegistry {
         }
     }
 
+    /// Validates the incoming request for several things:
+    ///
+    /// * Does the application ID exist,
+    /// * Does the `D360-Api-Token` header exist,
+    /// * Is the given `D360-Api-Token` header same as in database or configuration,
+    /// * If `allow_empty_signature` is set to `false`, is the `D360-Signature`
+    ///   the same as a HMAC signature created from the platform secret and raw
+    ///   data.
     pub fn validate(
         &self,
         app_id: &str,
@@ -373,7 +390,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         let validation = APP_REGISTRY.validate(
             "1",
@@ -416,7 +433,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let validation = APP_REGISTRY.validate(
             "1",
             &device_headers,
@@ -457,7 +474,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let validation = APP_REGISTRY.validate(
             "1",
             &device_headers,
@@ -483,7 +500,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(
             Err(Error::AppDoesNotExist),
@@ -507,7 +524,7 @@ mod tests {
             ),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(
             Err(Error::MissingToken),
@@ -535,7 +552,7 @@ mod tests {
             HeaderValue::from_static("pylly"),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(
             Err(Error::InvalidToken),
@@ -557,7 +574,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let validation = APP_REGISTRY.validate(
             "1",
             &device_headers,
@@ -580,7 +597,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let validation = app_registry.validate(
             "1",
             &device_headers,
@@ -606,7 +623,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let validation = APP_REGISTRY.validate(
             "1",
             &device_headers,
@@ -633,7 +650,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::from(&header_map);
+        let device_headers = DeviceHeaders::new(&header_map, || None);
         let validation = APP_REGISTRY.validate(
             "1",
             &device_headers,

@@ -108,6 +108,17 @@ impl GelfLogger {
         Ok(())
     }
 
+    pub fn log_without_headers(
+        &self,
+        title: &str,
+        level: Level,
+    )
+    {
+        let mut msg = Message::new(title.to_string());
+        msg.set_level(level);
+        self.log_message(msg);
+    }
+
     pub fn log_app_update(&self, app: &Application) -> Result<(), Error> {
         let mut msg = Message::new("Application data update".to_string());
         msg.set_level(Level::Informational);
