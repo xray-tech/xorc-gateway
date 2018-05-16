@@ -30,13 +30,13 @@ rand = "0.5.0-pre.1"
 uuid = { version = "0.6", features = ["serde", "v4"] }
 tokio = "0.1"
 tokio-threadpool = "0.1"
-prometheus = "0.4"
 hex = "0.3"
 r2d2 = "0.8"
 r2d2_postgres = "0.14"
 indoc = "0.2"
 crossbeam = "0.3"
 aerospike = "0.2"
+prometheus = { git = "https://github.com/flier/rust-prometheus.git", branch = "protobuf-1.6" }
 
 [build-dependencies]
 prost-build = "0.3"
