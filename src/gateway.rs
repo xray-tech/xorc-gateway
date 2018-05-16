@@ -61,18 +61,20 @@ pub struct Gateway {
     entity_storage: Arc<Option<EntityStorage>>,
 }
 
-type ResponseFuture = Box<Future<Item=Response<Body>, Error=GatewayError> + Send + 'static>;
-
 impl Gateway {
-    fn service(&self, req: Request<Body>) -> ResponseFuture {
+    fn service(
+        &self, 
+        req: Request<Body>
+    ) -> Box<Future<Item=Response<Body>, Error=GatewayError> + Send + 'static
+    {
         match (req.method(), req.uri().path()) {
             // SDK OPTIONS request
             (&Method::OPTIONS, "/") => {
-                Box::new(future::ok(self.handle_options()))
+                Box::new(self.handle_options())
             },
             // SDK events main path
             (&Method::POST, "/") => {
-                self.handle_sdk(req)
+                Box::new(self.handle_sdk(req))
             },
             // Prometheus metrics
             (&Method::GET, "/watchdog") => {
@@ -148,12 +150,13 @@ impl Gateway {
             encoder.format_type()
         );
 
-        let response = builder.body(buffer.into()).unwrap();
-
-        future::ok(response)
+        ok(builder.body(buffer.into()).unwrap())
     }
 
-    fn handle_options(&self) -> Response<Body> {
+    fn handle_options(
+        &self,
+    ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
+    {
         let mut builder = Response::builder();
         builder.status(StatusCode::OK);
 
@@ -163,7 +166,7 @@ impl Gateway {
             }
         }
 
-        builder.body("".into()).unwrap()
+        ok(builder.body("".into()).unwrap())
     }
 
     fn get_device_headers(
@@ -262,7 +265,7 @@ impl Gateway {
     fn handle_sdk(
         &self,
         req: Request<Body>
-    ) -> ResponseFuture
+    ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
     {
         let cors = self.cors.clone();
         let app_registry = self.app_registry.clone();
@@ -270,7 +273,7 @@ impl Gateway {
         let (head, body) = req.into_parts();
         let headers = Arc::new(head.headers);
 
-        let handling = body
+        body
             .concat2()
             .map_err(|_| GatewayError::InternalServerError("body concat"))
             .and_then(move |body| {
@@ -300,8 +303,6 @@ impl Gateway {
                     },
                     Ok(res) => ok(res)
                 }
-            });
-
-        Box::new(handling)
+            })
     }
 }
