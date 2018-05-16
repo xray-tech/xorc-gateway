@@ -12,7 +12,7 @@ use std::{
 use base64;
 use config::Config;
 use ring::{hmac, digest};
-use error::Error;
+use error::GatewayError;
 use events::input;
 use headers::DeviceHeaders;
 use crossbeam::sync::ArcCell;
@@ -147,13 +147,13 @@ impl AppRegistry {
         device_headers: &DeviceHeaders,
         platform: &input::Platform,
         raw_data: &[u8],
-    ) -> Result<(), Error>
+    ) -> Result<(), GatewayError>
     {
         let apps = self.apps.get();
 
         let app = apps
             .get(app_id)
-            .ok_or(Error::AppDoesNotExist)?;
+            .ok_or(GatewayError::AppDoesNotExist)?;
 
         let valid_token = app
             .token
@@ -163,9 +163,9 @@ impl AppRegistry {
         let sent_token = device_headers
             .api_token
             .as_ref()
-            .ok_or(Error::MissingToken)?;
+            .ok_or(GatewayError::MissingToken)?;
 
-        if sent_token != valid_token { return Err(Error::InvalidToken) }
+        if sent_token != valid_token { return Err(GatewayError::InvalidToken) }
 
         if self.allow_empty_signature {
             warn!("Skipped signature checks because of configuration. Use only on development!");
@@ -175,23 +175,23 @@ impl AppRegistry {
         let signature = device_headers
             .signature
             .as_ref()
-            .ok_or(Error::MissingSignature)?;
+            .ok_or(GatewayError::MissingSignature)?;
 
         let platform_key = match platform {
             input::Platform::Ios     => app.ios_secret.as_ref(),
             input::Platform::Android => app.android_secret.as_ref(),
             input::Platform::Web     => app.web_secret.as_ref(),
             _                        => None,
-        }.ok_or(Error::AppDoesNotExist)?;
+        }.ok_or(GatewayError::AppDoesNotExist)?;
 
         let decoded_signature = base64::decode(signature.as_bytes())
-            .map_err(|_| Error::InvalidSignature)?;
+            .map_err(|_| GatewayError::InvalidSignature)?;
 
         hmac::verify(
             &platform_key,
             raw_data,
             &decoded_signature,
-        ).map_err(|_| Error::InvalidSignature)
+        ).map_err(|_| GatewayError::InvalidSignature)
     }
 
     pub fn run_updater(&self, control: Arc<AtomicBool>) {
@@ -297,7 +297,7 @@ impl AppRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use error::Error;
+    use error::GatewayError;
     use hyper::HeaderMap;
     use http::header::HeaderValue;
     use headers::DeviceHeaders;
@@ -503,7 +503,7 @@ mod tests {
         let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(
-            Err(Error::AppDoesNotExist),
+            Err(GatewayError::AppDoesNotExist),
             APP_REGISTRY.validate(
                 "2",
                 &device_headers,
@@ -527,7 +527,7 @@ mod tests {
         let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(
-            Err(Error::MissingToken),
+            Err(GatewayError::MissingToken),
             APP_REGISTRY.validate(
                 "1",
                 &device_headers,
@@ -555,7 +555,7 @@ mod tests {
         let device_headers = DeviceHeaders::new(&header_map, || None);
 
         assert_eq!(
-            Err(Error::InvalidToken),
+            Err(GatewayError::InvalidToken),
             APP_REGISTRY.validate(
                 "1",
                 &device_headers,
@@ -582,7 +582,7 @@ mod tests {
             "kulli".as_bytes()
         );
 
-        assert_eq!(Err(Error::MissingSignature), validation);
+        assert_eq!(Err(GatewayError::MissingSignature), validation);
     }
 
     #[test]
@@ -631,7 +631,7 @@ mod tests {
             "kulli".as_bytes()
         );
 
-        assert_eq!(Err(Error::AppDoesNotExist), validation);
+        assert_eq!(Err(GatewayError::AppDoesNotExist), validation);
     }
 
     #[test]
@@ -658,6 +658,6 @@ mod tests {
             "kulli".as_bytes()
         );
 
-        assert_eq!(Err(Error::InvalidSignature), validation);
+        assert_eq!(Err(GatewayError::InvalidSignature), validation);
     }
 }

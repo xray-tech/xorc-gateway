@@ -20,35 +20,20 @@ pub struct DeviceId {
 }
 
 impl DeviceHeaders {
-    fn get_value<K>(
-        headers: &HeaderMap,
-        key: K
-    ) -> Option<String>
-    where
-        K: AsHeaderName
-    {
-        headers
-            .get(key)
-            .and_then(|h| h.to_str().ok())
-            .map(|s| String::from(s))
-    }
-
-    fn create_new_id() -> DeviceId {
-        let mut uuid = [0u8; 16];
-        thread_rng().fill_bytes(&mut uuid);
-
-        let cleartext = Cleartext::from(
-            Uuid::new_v4().hyphenated().to_string()
-        );
-
-        let ciphertext = Ciphertext::encrypt(&cleartext);
-
-        DeviceId {
-            ciphertext: Some(ciphertext),
-            cleartext: Some(cleartext),
-        }
-    }
-
+    /// Creates a structure of device information from request headers. If
+    /// `D360-Device-Id` is not included in the request, uses the given closure
+    /// to find a device id for the user. If the header exists, it's expected to
+    /// be encrypted using AES-256-GCM AEAD encryption.
+    ///
+    /// Possibilities with the incoming device-id:
+    ///
+    /// - Exists and valid: unencrypted and stored to the struct and we should
+    ///   continue
+    /// - Exists but invalid: cleartext not stored to the struct, user should
+    ///   get an error
+    /// - Empty: try using the given closure to fetch the id, then encrypting
+    ///   it. If closure doesn't give any id for the device, we generate one using
+    ///   UUID version4 (random)
     pub fn new<F>(
         headers: &HeaderMap,
         fetch_device_id: F,
@@ -90,6 +75,35 @@ impl DeviceHeaders {
             signature: Self::get_value(&headers, "D360-Signature"),
             ip: Self::get_value(&headers, "X-Real-IP"),
             origin: Self::get_value(&headers, header::ORIGIN)
+        }
+    }
+
+    fn get_value<K>(
+        headers: &HeaderMap,
+        key: K
+    ) -> Option<String>
+    where
+        K: AsHeaderName
+    {
+        headers
+            .get(key)
+            .and_then(|h| h.to_str().ok())
+            .map(|s| String::from(s))
+    }
+
+    fn create_new_id() -> DeviceId {
+        let mut uuid = [0u8; 16];
+        thread_rng().fill_bytes(&mut uuid);
+
+        let cleartext = Cleartext::from(
+            Uuid::new_v4().hyphenated().to_string()
+        );
+
+        let ciphertext = Ciphertext::encrypt(&cleartext);
+
+        DeviceId {
+            ciphertext: Some(ciphertext),
+            cleartext: Some(cleartext),
         }
     }
 }

@@ -9,7 +9,6 @@ use http::{header, HeaderMap};
 use hyper::{
     Body, Method, Request, Response, Server, StatusCode,
     service::service_fn,
-    self,
 };
 
 use std::{
@@ -18,7 +17,14 @@ use std::{
 };
 
 use futures::{
-    future::self,
+    future::{
+        self,
+        lazy,
+        poll_fn,
+        ok,
+        err,
+        Either
+    },
     Future,
     Stream,
     sync::oneshot,
@@ -35,11 +41,13 @@ use events::{
 };
 use tokio_threadpool::{
     self,
+    blocking,
+    BlockingError,
 };
 
 use serde_json;
 use config::Config;
-use error::{self, Error};
+use error::{self, GatewayError};
 use headers::DeviceHeaders;
 use tokio::runtime::{Builder as RuntimeBuilder};
 use app_registry::AppRegistry;
@@ -53,7 +61,7 @@ pub struct Gateway {
     entity_storage: Arc<Option<EntityStorage>>,
 }
 
-type ResponseFuture = Box<Future<Item=Response<Body>, Error=hyper::Error> + Send + 'static>;
+type ResponseFuture = Box<Future<Item=Response<Body>, Error=GatewayError> + Send + 'static>;
 
 impl Gateway {
     fn service(&self, req: Request<Body>) -> ResponseFuture {
@@ -64,7 +72,7 @@ impl Gateway {
             },
             // SDK events main path
             (&Method::POST, "/") => {
-                Box::new(self.handle_event(req))
+                self.handle_sdk(req)
             },
             // Prometheus metrics
             (&Method::GET, "/watchdog") => {
@@ -123,7 +131,10 @@ impl Gateway {
         runtime.shutdown_on_idle().wait().unwrap();
     }
 
-    fn handle_metrics(&self) -> impl Future<Item=Response<Body>, Error=hyper::Error> {
+    fn handle_metrics(
+        &self,
+    ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
+    {
         let encoder = TextEncoder::new();
         let metric_families = prometheus::gather();
         let mut buffer = vec![];
@@ -156,45 +167,46 @@ impl Gateway {
     }
 
     fn get_device_headers(
-        event: &SDKEventBatch,
-        header_map: &HeaderMap,
-        entity_storage: Arc<Option<EntityStorage>>,
-    ) -> DeviceHeaders
+        event: Arc<SDKEventBatch>,
+        header_map: Arc<HeaderMap>,
+        entity_storage: Arc<Option<EntityStorage>>
+    ) -> impl Future<Item=DeviceHeaders, Error=BlockingError> + 'static + Send
     {
-        match *entity_storage {
-            Some(ref entity_storage) => {
-                DeviceHeaders::new(
-                    header_map,
-                    || entity_storage.get_id_for_ifa(
-                        &event.environment.app_id,
-                        &event.device,
+        lazy(move || poll_fn(move || blocking(|| {
+            match *entity_storage {
+                Some(ref entity_storage) => {
+                    DeviceHeaders::new(
+                        &*header_map,
+                        || entity_storage.get_id_for_ifa(
+                            &event.environment.app_id,
+                            &event.device,
+                        )
                     )
-                )
-            },
-            _ => {
-                DeviceHeaders::new(
-                    header_map,
-                    || None,
-                )
+                },
+                _ => {
+                    DeviceHeaders::new(
+                        &*header_map,
+                        || None,
+                    )
+                }
             }
-        }
+        })))
     }
 
     fn handle_event(
-        &self,
-        req: Request<Body>
-    ) -> impl Future<Item=Response<Body>, Error=hyper::Error>
+        body: Vec<u8>,
+        cors: Arc<Option<Cors>>,
+        app_registry: Arc<AppRegistry>,
+        event: Arc<SDKEventBatch>,
+        headers: Arc<HeaderMap>,
+        entity_storage: Arc<Option<EntityStorage>>
+    ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
     {
         let mut builder = Response::builder();
-        let cors = self.cors.clone();
-        let app_registry = self.app_registry.clone();
-        let entity_storage = self.entity_storage.clone();
-        let (head, body) = req.into_parts();
 
-        body.concat2().map(move |ref body| {
-            if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body).map(|e| Arc::new(e)) {
-                let device_headers = Self::get_device_headers(&event, &head.headers, entity_storage);
-
+        Self::get_device_headers(event.clone(), headers.clone(), entity_storage.clone())
+            .map_err(|_| GatewayError::ServiceUnavailable)
+            .map(move |device_headers| {
                 if device_headers.device_id.cleartext.is_none() {
                     return error::bad_device_id(&device_headers, builder)
                 }
@@ -225,12 +237,12 @@ impl Gateway {
 
                 match validation
                 {
-                    Err(Error::AppDoesNotExist)  => error::unknown_app(&device_headers, builder),
-                    Err(Error::MissingToken)     => error::missing_token(&device_headers, builder),
-                    Err(Error::MissingSignature) => error::missing_signature(&device_headers, builder),
-                    Err(Error::InvalidSignature) => error::invalid_signature(&device_headers, builder),
-                    Err(Error::InvalidToken)     => error::invalid_token(&device_headers, builder),
-                    Ok(()) => {
+                    Err(GatewayError::AppDoesNotExist)  => error::unknown_app(&device_headers, builder),
+                    Err(GatewayError::MissingToken)     => error::missing_token(&device_headers, builder),
+                    Err(GatewayError::MissingSignature) => error::missing_signature(&device_headers, builder),
+                    Err(GatewayError::InvalidSignature) => error::invalid_signature(&device_headers, builder),
+                    Err(GatewayError::InvalidToken)     => error::invalid_token(&device_headers, builder),
+                    _ => {
                         let results: Vec<EventResult> = event.events.iter().map(|e| {
                             EventResult::register(
                                 &e.id,
@@ -244,9 +256,52 @@ impl Gateway {
                         builder.body(body.into()).unwrap()
                     },
                 }
-            } else {
-                error::invalid_payload(builder)
-            }
-        })
+            })
+    }
+
+    fn handle_sdk(
+        &self,
+        req: Request<Body>
+    ) -> ResponseFuture
+    {
+        let cors = self.cors.clone();
+        let app_registry = self.app_registry.clone();
+        let entity_storage = self.entity_storage.clone();
+        let (head, body) = req.into_parts();
+        let headers = Arc::new(head.headers);
+
+        let handling = body
+            .concat2()
+            .map_err(|_| GatewayError::InternalServerError("body concat"))
+            .and_then(move |body| {
+                if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body).map(|e| Arc::new(e)) {
+                    Either::A(Self::handle_event(
+                        body.to_vec(),
+                        cors,
+                        app_registry,
+                        event,
+                        headers,
+                        entity_storage,
+                    ))
+                } else {
+                    Either::B(ok(error::invalid_payload(Response::builder())))
+                }
+            })
+            .then(|res| {
+                match res {
+                    Err(GatewayError::InternalServerError(reason)) => {
+                        ok(error::internal_server_error(reason))
+                    },
+                    Err(GatewayError::ServiceUnavailable) => {
+                        ok(error::service_unavailable())
+                    },
+                    Err(e) => {
+                        err(e)
+                    },
+                    Ok(res) => ok(res)
+                }
+            });
+
+        Box::new(handling)
     }
 }
