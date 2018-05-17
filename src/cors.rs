@@ -4,15 +4,16 @@ use std::{
     iter::FromIterator,
 };
 
+use http::{response::Builder, Response, header::{self, HeaderValue}};
+
 use config::Config;
-use http::{header::{self, HeaderName, HeaderValue}};
+use events::input::Platform;
 
 pub struct Cors {
     allowed_methods: String,
     allowed_headers: String,
     allowed_origins: HashMap<String, HashSet<String>>
 }
-
 
 impl Cors {
     pub fn new(config: Arc<Config>) -> Option<Cors> {
@@ -36,51 +37,73 @@ impl Cors {
         })
     }
 
-    pub fn headers_for(
+    pub fn valid_origin(
         &self,
         app_id: &str,
-        origin: &str
-    ) -> Option<Vec<(HeaderName, HeaderValue)>>
+        origin: Option<&str>,
+    ) -> bool
     {
-        match self.allowed_origins.get(app_id) {
-            Some(app_origins) if app_origins.contains(origin)  => {
-                let mut headers = Vec::new();
-                headers.push((
-                    header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                    origin.to_string().parse().unwrap()
-                ));
-
-                headers.push((
-                    header::ACCESS_CONTROL_ALLOW_METHODS,
-                    self.allowed_methods.parse().unwrap()
-                ));
-
-                headers.push((
-                    header::ACCESS_CONTROL_ALLOW_HEADERS,
-                    self.allowed_headers.parse().unwrap()
-                ));
-
-                Some(headers)
-            },
-            _ => None
+        if let Some(origin) = origin {
+            match self.allowed_origins.get(app_id) {
+                Some(app_origins) if app_origins.contains(origin) => true,
+                _ => false
+            }
+        } else {
+            false
         }
     }
 
-    pub fn wildcard_headers(&self) -> Vec<(HeaderName, HeaderValue)> {
-        vec![
-            (
+    pub fn response_builder_origin(
+        &self,
+        app_id: &str,
+        origin: Option<&str>,
+        platform: &Platform
+    ) -> Builder
+    {
+        let mut builder = Response::builder();
+
+        if self.valid_origin(app_id, origin) && (platform == &Platform::Web) {
+            builder.header(
                 header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                "*".parse().unwrap()
-            ),
-            (
+                HeaderValue::from_str(origin.unwrap()).unwrap(),
+            );
+
+            builder.header(
                 header::ACCESS_CONTROL_ALLOW_METHODS,
-                self.allowed_methods.parse().unwrap()
-            ),
-            (
+                HeaderValue::from_str(self.allowed_methods.as_ref()).unwrap(),
+            );
+
+            builder.header(
                 header::ACCESS_CONTROL_ALLOW_HEADERS,
-                self.allowed_headers.parse().unwrap()
-            ),
-        ]
+                HeaderValue::from_str(self.allowed_headers.as_ref()).unwrap(),
+            );
+        }
+
+        builder
+    }
+
+    pub fn response_builder_wildcard(
+        &self,
+    ) -> Builder
+    {
+        let mut builder = Response::builder();
+
+        builder.header(
+            header::ACCESS_CONTROL_ALLOW_ORIGIN,
+            HeaderValue::from_static("*"),
+        );
+
+        builder.header(
+            header::ACCESS_CONTROL_ALLOW_METHODS,
+            HeaderValue::from_str(self.allowed_methods.as_ref()).unwrap(),
+        );
+
+        builder.header(
+            header::ACCESS_CONTROL_ALLOW_HEADERS,
+            HeaderValue::from_str(self.allowed_headers.as_ref()).unwrap(),
+        );
+
+        builder
     }
 }
 
@@ -89,6 +112,7 @@ mod tests {
     use super::*;
     use config::Config;
     use std::sync::Arc;
+    use events::input::Platform;
 
     #[test]
     fn new_with_no_cors_config() {
@@ -108,59 +132,82 @@ mod tests {
     fn wildcard_headers() {
         let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests"))).unwrap();
 
+        let response = cors.response_builder_wildcard().body("").unwrap();
+
+        let headers = response.headers();
+
         assert_eq!(
-            vec![
-                (
-                    header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                    "*".parse().unwrap()
-                ),
-                (
-                    header::ACCESS_CONTROL_ALLOW_METHODS,
-                    "HERP,DERP".parse().unwrap()
-                ),
-                (
-                    header::ACCESS_CONTROL_ALLOW_HEADERS,
-                    "Content-Type, Content-Length".parse().unwrap()
-                ),
-            ],
-            cors.wildcard_headers(),
-        )
+            "*",
+            headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap()
+        );
+
+        assert_eq!(
+            "HERP,DERP",
+            headers.get(header::ACCESS_CONTROL_ALLOW_METHODS).unwrap()
+        );
+
+        assert_eq!(
+            "Content-Type, Content-Length",
+            headers.get(header::ACCESS_CONTROL_ALLOW_HEADERS).unwrap()
+        );
     }
 
     #[test]
     fn headers_for_existing_app_from_allowed_origin() {
         let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests"))).unwrap();
 
+        let response = cors.response_builder_origin(
+            "2",
+            Some("https://reddit.com"),
+            &Platform::Web
+        ).body("").unwrap();
+
+        let headers = response.headers();
+
         assert_eq!(
-            Some(vec![
-                (
-                    header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                    "https://reddit.com".parse().unwrap()
-                ),
-                (
-                    header::ACCESS_CONTROL_ALLOW_METHODS,
-                    "HERP,DERP".parse().unwrap()
-                ),
-                (
-                    header::ACCESS_CONTROL_ALLOW_HEADERS,
-                    "Content-Type, Content-Length".parse().unwrap()
-                ),
-            ]),
-            cors.headers_for("2", "https://reddit.com")
+            "https://reddit.com",
+            headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap()
         );
+
+        assert_eq!(
+            "HERP,DERP",
+            headers.get(header::ACCESS_CONTROL_ALLOW_METHODS).unwrap()
+        );
+
+        assert_eq!(
+            "Content-Type, Content-Length",
+            headers.get(header::ACCESS_CONTROL_ALLOW_HEADERS).unwrap()
+        );
+
     }
 
     #[test]
     fn headers_for_existing_app_from_wrong_origin() {
         let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests"))).unwrap();
 
-        assert!(cors.headers_for("2", "https://facebook.com").is_none());
+        let response = cors.response_builder_origin(
+            "2",
+            Some("https://facebook.com"),
+            &Platform::Web
+        ).body("").unwrap();
+
+        let headers = response.headers();
+
+        assert!(headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).is_none());
     }
 
     #[test]
     fn headers_for_non_existing_app() {
         let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests"))).unwrap();
 
-        assert!(cors.headers_for("3", "https://www.google.fi").is_none());
+        let response = cors.response_builder_origin(
+            "3",
+            Some("https://reddit.com"),
+            &Platform::Web
+        ).body("").unwrap();
+
+        let headers = response.headers();
+
+        assert!(headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).is_none());
     }
 }

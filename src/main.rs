@@ -44,7 +44,7 @@ extern crate chan_signal;
 
 mod entity_storage;
 mod error;
-mod headers;
+mod context;
 mod events;
 mod gateway;
 mod config;

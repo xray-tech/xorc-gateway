@@ -26,7 +26,7 @@ lazy_static! {
         aead::SealingKey::new(&aead::AES_256_GCM, &SECRET).unwrap();
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Ciphertext {
     value: String,
 }
@@ -105,7 +105,7 @@ impl Serialize for Ciphertext {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Cleartext {
     value: String
 }

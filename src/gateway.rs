@@ -48,11 +48,12 @@ use tokio_threadpool::{
 use serde_json;
 use config::Config;
 use error::{self, GatewayError};
-use headers::DeviceHeaders;
+use context::Context;
 use tokio::runtime::{Builder as RuntimeBuilder};
 use app_registry::AppRegistry;
 use entity_storage::EntityStorage;
 use cors::Cors;
+use ::GLOG;
 
 pub struct Gateway {
     config: Arc<Config>,
@@ -154,107 +155,104 @@ impl Gateway {
     }
 
     fn handle_options(&self) -> Response<Body> {
-        let mut builder = Response::builder();
+        let mut builder =
+            if let Some(ref cors) = *self.cors {
+                cors.response_builder_wildcard()
+            } else {
+                Response::builder()
+            };
+
         builder.status(StatusCode::OK);
-
-        if let Some(ref cors) = *self.cors {
-            for (k, v) in cors.wildcard_headers().into_iter() {
-                builder.header(k, v);
-            }
-        }
-
         builder.body("".into()).unwrap()
     }
 
-    fn get_device_headers(
+    fn get_context(
         event: Arc<SDKEventBatch>,
         header_map: Arc<HeaderMap>,
         entity_storage: Arc<Option<EntityStorage>>
-    ) -> impl Future<Item=DeviceHeaders, Error=BlockingError> + 'static + Send
+    ) -> impl Future<Item=Context, Error=BlockingError> + 'static + Send
     {
         lazy(move || poll_fn(move || blocking(|| {
             match *entity_storage {
-                Some(ref entity_storage) => {
-                    DeviceHeaders::new(
+                Some(ref es) => {
+                    let fun = || es.get_id_for_ifa(&event.environment.app_id, &event.device);
+
+                    Context::new(
                         &*header_map,
-                        || entity_storage.get_id_for_ifa(
-                            &event.environment.app_id,
-                            &event.device,
-                        )
+                        &event.environment.app_id,
+                        event.device.platform(),
+                        fun
                     )
                 },
-                _ => {
-                    DeviceHeaders::new(
+                None => {
+                    let fun = || None;
+
+                    Context::new(
                         &*header_map,
-                        || None,
+                        &event.environment.app_id,
+                        event.device.platform(),
+                        fun
                     )
                 }
             }
         })))
     }
 
-    fn handle_event(
+    fn handle_event<'a>(
         body: Vec<u8>,
         cors: Arc<Option<Cors>>,
         app_registry: Arc<AppRegistry>,
         event: Arc<SDKEventBatch>,
         headers: Arc<HeaderMap>,
         entity_storage: Arc<Option<EntityStorage>>
-    ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
+    ) -> impl Future<Item=(String, Context), Error=(GatewayError, Option<Context>)> + 'static + Send
     {
-        let mut builder = Response::builder();
-
-        Self::get_device_headers(event.clone(), headers.clone(), entity_storage.clone())
-            .map_err(|_| GatewayError::ServiceUnavailable)
-            .map(move |device_headers| {
-                if device_headers.device_id.cleartext.is_none() {
-                    return error::bad_device_id(&device_headers, builder)
+        Self::get_context(event.clone(), headers.clone(), entity_storage.clone())
+            .map_err(|_| {
+                (GatewayError::ServiceUnavailable("Too many pending requests to Aerospike"), None)
+            })
+            .and_then(move |context| {
+                if context.device_id.cleartext.is_none() {
+                    return err((GatewayError::BadDeviceId, Some(context)))
                 }
 
                 if let Some(ref cors) = *cors {
                     if event.device.platform() == Platform::Web {
-                        let cors_headers = device_headers.origin.as_ref()
-                            .and_then(|o| {
-                                cors.headers_for(&event.environment.app_id, &o)
-                            });
-
-                        if let Some(headers) = cors_headers {
-                            for (k, v) in headers.into_iter() {
-                                builder.header(k, v);
-                            }
-                        } else {
-                            return error::unknown_origin(&device_headers, builder)
+                        if !cors.valid_origin(&context.app_id, context.origin.as_ref().map(|x| &**x)) {
+                            return err((GatewayError::UnknownOrigin, Some(context)))
                         }
                     }
                 }
 
                 let validation = app_registry.validate(
                     &event.environment.app_id,
-                    &device_headers,
+                    &context,
                     &event.device.platform(),
                     &body,
                 );
 
-                match validation
-                {
-                    Err(GatewayError::AppDoesNotExist)  => error::unknown_app(&device_headers, builder),
-                    Err(GatewayError::MissingToken)     => error::missing_token(&device_headers, builder),
-                    Err(GatewayError::MissingSignature) => error::missing_signature(&device_headers, builder),
-                    Err(GatewayError::InvalidSignature) => error::invalid_signature(&device_headers, builder),
-                    Err(GatewayError::InvalidToken)     => error::invalid_token(&device_headers, builder),
-                    _ => {
+                match validation {
+                    Ok(()) => {
+                        let api_token = context.api_token.clone();
+                        let ciphertext = context.device_id.ciphertext.clone();
+
                         let results: Vec<EventResult> = event.events.iter().map(|e| {
                             EventResult::register(
                                 &e.id,
                                 EventStatus::Success,
-                                &device_headers,
+                                &api_token,
+                                &ciphertext,
                             )
                         }).collect();
 
-                        let body = serde_json::to_string(&SDKResponse::from(results)).unwrap();
-
-                        builder.body(body.into()).unwrap()
+                        ok((
+                            serde_json::to_string(&SDKResponse::from(results)).unwrap(),
+                            context
+                        ))
                     },
+                    Err(e) => {
+                        err((e, Some(context)))
+                    }
                 }
             })
     }
@@ -264,7 +262,9 @@ impl Gateway {
         req: Request<Body>
     ) -> ResponseFuture
     {
-        let cors = self.cors.clone();
+        let handle_event_cors = self.cors.clone();
+        let ok_response_cors = self.cors.clone();
+        let err_response_cors = self.cors.clone();
         let app_registry = self.app_registry.clone();
         let entity_storage = self.entity_storage.clone();
         let (head, body) = req.into_parts();
@@ -272,33 +272,44 @@ impl Gateway {
 
         let handling = body
             .concat2()
-            .map_err(|_| GatewayError::InternalServerError("body concat"))
+            .or_else(|_| err((GatewayError::InternalServerError("body concat"), None)))
             .and_then(move |body| {
                 if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body).map(|e| Arc::new(e)) {
                     Either::A(Self::handle_event(
                         body.to_vec(),
-                        cors,
+                        handle_event_cors,
                         app_registry,
                         event,
-                        headers,
+                        headers.clone(),
                         entity_storage,
                     ))
                 } else {
-                    Either::B(ok(error::invalid_payload(Response::builder())))
+                    Either::B(err((GatewayError::InvalidPayload, None)))
                 }
             })
-            .then(|res| {
+            .then(move |res| {
                 match res {
-                    Err(GatewayError::InternalServerError(reason)) => {
-                        ok(error::internal_server_error(reason))
+                    Ok((sdk_response, context)) => {
+                        let json_body = serde_json::to_string(&sdk_response).unwrap();
+
+                        let mut builder =
+                            if let Some(ref cors) = *ok_response_cors {
+                                cors.response_builder_origin(
+                                    &context.app_id,
+                                    context.origin.as_ref().map(|x| &**x),
+                                    &context.platform
+                                )
+                            } else {
+                                Response::builder()
+                            };
+
+                        builder.status(StatusCode::OK);
+                        ok(builder.body(json_body.into()).unwrap())
                     },
-                    Err(GatewayError::ServiceUnavailable) => {
-                        ok(error::service_unavailable())
+                    Err((e, context)) => {
+                        let _ = GLOG.log_error(&e, &context);
+                        ok(error::into_response(e, context, &*err_response_cors))
                     },
-                    Err(e) => {
-                        err(e)
-                    },
-                    Ok(res) => ok(res)
                 }
             });
 

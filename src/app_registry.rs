@@ -14,7 +14,7 @@ use config::Config;
 use ring::{hmac, digest};
 use error::GatewayError;
 use events::input;
-use headers::DeviceHeaders;
+use context::Context;
 use crossbeam::sync::ArcCell;
 use r2d2;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
@@ -144,7 +144,7 @@ impl AppRegistry {
     pub fn validate(
         &self,
         app_id: &str,
-        device_headers: &DeviceHeaders,
+        context: &Context,
         platform: &input::Platform,
         raw_data: &[u8],
     ) -> Result<(), GatewayError>
@@ -160,7 +160,7 @@ impl AppRegistry {
             .as_ref()
             .unwrap_or(&self.config.gateway.default_token);
 
-        let sent_token = device_headers
+        let sent_token = context
             .api_token
             .as_ref()
             .ok_or(GatewayError::MissingToken)?;
@@ -172,7 +172,7 @@ impl AppRegistry {
             return Ok(())
         }
 
-        let signature = device_headers
+        let signature = context
             .signature
             .as_ref()
             .ok_or(GatewayError::MissingSignature)?;
@@ -187,11 +187,9 @@ impl AppRegistry {
         let decoded_signature = base64::decode(signature.as_bytes())
             .map_err(|_| GatewayError::InvalidSignature)?;
 
-        hmac::verify(
-            &platform_key,
-            raw_data,
-            &decoded_signature,
-        ).map_err(|_| GatewayError::InvalidSignature)
+        hmac::verify(&platform_key, raw_data, &decoded_signature)
+            .map_err(|_| GatewayError::InvalidSignature)
+            .and_then(|_| Ok(()))
     }
 
     pub fn run_updater(&self, control: Arc<AtomicBool>) {
@@ -300,7 +298,7 @@ mod tests {
     use error::GatewayError;
     use hyper::HeaderMap;
     use http::header::HeaderValue;
-    use headers::DeviceHeaders;
+    use context::Context;
     use events::input::Platform;
 
     const TOKEN: &'static str =
@@ -390,16 +388,16 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
 
         let validation = APP_REGISTRY.validate(
             "1",
-            &device_headers,
+            &context,
             &Platform::Ios,
             "kulli".as_bytes()
         );
 
-        assert_eq!(Ok(()), validation);
+        assert!(validation.is_ok());
     }
 
     /// Testing the validation of Android signature against the sent data. The
@@ -433,15 +431,15 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
         let validation = APP_REGISTRY.validate(
             "1",
-            &device_headers,
+            &context,
             &Platform::Android,
             "kulli".as_bytes()
         );
 
-        assert_eq!(Ok(()), validation);
+        assert!(validation.is_ok());
     }
 
     /// Testing the validation of Web signature against the sent data. The
@@ -474,15 +472,15 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
         let validation = APP_REGISTRY.validate(
             "1",
-            &device_headers,
+            &context,
             &Platform::Web,
             "kulli".as_bytes()
         );
 
-        assert_eq!(Ok(()), validation);
+        assert!(validation.is_ok());
     }
 
     #[test]
@@ -500,13 +498,13 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
 
         assert_eq!(
             Err(GatewayError::AppDoesNotExist),
             APP_REGISTRY.validate(
                 "2",
-                &device_headers,
+                &context,
                 &Platform::Web,
                 "kulli".as_bytes()
             )
@@ -524,13 +522,13 @@ mod tests {
             ),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
 
         assert_eq!(
             Err(GatewayError::MissingToken),
             APP_REGISTRY.validate(
                 "1",
-                &device_headers,
+                &context,
                 &Platform::Web,
                 "kulli".as_bytes()
             )
@@ -552,13 +550,13 @@ mod tests {
             HeaderValue::from_static("pylly"),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
 
         assert_eq!(
             Err(GatewayError::InvalidToken),
             APP_REGISTRY.validate(
                 "1",
-                &device_headers,
+                &context,
                 &Platform::Web,
                 "kulli".as_bytes()
             )
@@ -574,10 +572,10 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
         let validation = APP_REGISTRY.validate(
             "1",
-            &device_headers,
+            &context,
             &Platform::Web,
             "kulli".as_bytes()
         );
@@ -597,15 +595,15 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
         let validation = app_registry.validate(
             "1",
-            &device_headers,
+            &context,
             &Platform::Web,
             "kulli".as_bytes()
         );
 
-        assert_eq!(Ok(()), validation);
+        assert!(validation.is_ok());
     }
 
     #[test]
@@ -623,10 +621,10 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
         let validation = APP_REGISTRY.validate(
             "1",
-            &device_headers,
+            &context,
             &Platform::Unknown,
             "kulli".as_bytes()
         );
@@ -650,10 +648,10 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let device_headers = DeviceHeaders::new(&header_map, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
         let validation = APP_REGISTRY.validate(
             "1",
-            &device_headers,
+            &context,
             &Platform::Android,
             "kulli".as_bytes()
         );

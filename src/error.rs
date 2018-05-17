@@ -1,7 +1,6 @@
-use headers::DeviceHeaders;
+use context::Context;
 use http::response;
-use gelf::Level;
-use ::GLOG;
+use cors::Cors;
 use std::{error::Error, fmt};
 
 use hyper::{
@@ -17,8 +16,11 @@ pub enum GatewayError {
     MissingToken,
     MissingSignature,
     InvalidSignature,
+    UnknownOrigin,
+    BadDeviceId,
+    InvalidPayload,
     InternalServerError(&'static str),
-    ServiceUnavailable,
+    ServiceUnavailable(&'static str),
 }
 
 impl fmt::Display for GatewayError {
@@ -30,13 +32,26 @@ impl fmt::Display for GatewayError {
 impl Error for GatewayError {
     fn description(&self) -> &str {
         match self {
-            GatewayError::AppDoesNotExist => "Application does not exist",
-            GatewayError::InvalidToken => "The given SDK token was invalid",
-            GatewayError::MissingToken => "No SDK token given",
-            GatewayError::MissingSignature => "The signature header was missing",
-            GatewayError::InvalidSignature => "The signature header was invalid",
-            GatewayError::InternalServerError(reason) => reason,
-            GatewayError::ServiceUnavailable => "The service is currently overloaded",
+            GatewayError::AppDoesNotExist =>
+                "Application does not exist",
+            GatewayError::InvalidToken =>
+                "The given SDK token was invalid",
+            GatewayError::MissingToken =>
+                "No SDK token given",
+            GatewayError::MissingSignature =>
+                "The signature header was missing",
+            GatewayError::InvalidSignature =>
+                "The signature header was invalid",
+            GatewayError::UnknownOrigin =>
+                "The ORIGIN didn't match to the CORS configuration",
+            GatewayError::BadDeviceId =>
+                "There is something fishy in the device id encryption",
+            GatewayError::InvalidPayload =>
+                "The request JSON was faulty",
+            GatewayError::InternalServerError(reason) =>
+                reason,
+            GatewayError::ServiceUnavailable(reason) =>
+                reason,
         }
     }
 
@@ -45,152 +60,68 @@ impl Error for GatewayError {
     }
 }
 
-pub fn unknown_app(
-    device_headers: &DeviceHeaders,
-    mut builder: response::Builder
-) -> Response<Body>
+fn response_builder_for(context: &Option<Context>, cors: &Option<Cors>) -> response::Builder
 {
-    let _ = GLOG.log_with_headers(
-        "Unknown app",
-        Level::Error,
-        &device_headers,
-    );
+    if let Some(cors) = cors {
+        if let Some(context) = context {
+            return cors.response_builder_origin(
+                &context.app_id,
+                context.origin.as_ref().map(|s| &**s),
+                &context.platform
+            )
+        }
+    }
 
-    builder.status(StatusCode::FORBIDDEN);
-    builder.body("Unknown app".into()).unwrap()
+    Response::builder()
 }
 
-pub fn missing_token(
-    device_headers: &DeviceHeaders,
-    mut builder: response::Builder
-) -> Response<Body>
-{
-    let _ = GLOG.log_with_headers(
-        "Missing token",
-        Level::Error,
-        &device_headers,
-    );
+pub fn into_response(
+    error: GatewayError,
+    context: Option<Context>,
+    cors: &Option<Cors>
+) -> Response<Body> {
+    let mut builder = response_builder_for(&context, cors);
 
-    builder.status(StatusCode::PRECONDITION_FAILED);
-    builder.body("Missing D360-Api-Token".into()).unwrap()
-}
-
-pub fn missing_signature(
-    device_headers: &DeviceHeaders,
-    mut builder: response::Builder
-) -> Response<Body>
-{
-    let _ = GLOG.log_with_headers(
-        "Missing signature",
-        Level::Error,
-        &device_headers,
-    );
-
-    builder.status(StatusCode::PRECONDITION_FAILED);
-    builder.body("missing signature".into()).unwrap()
-}
-
-pub fn invalid_signature(
-    device_headers: &DeviceHeaders,
-    mut builder: response::Builder
-) -> Response<Body>
-{
-    let _ = GLOG.log_with_headers(
-        "Invalid signature",
-        Level::Error,
-        &device_headers,
-    );
-
-    builder.status(StatusCode::PRECONDITION_FAILED);
-
-    builder.body(
-        "Invalid signature, check your secret key".into()
-    ).unwrap()
-}
-
-pub fn invalid_token(
-    device_headers: &DeviceHeaders,
-    mut builder: response::Builder
-) -> Response<Body>
-{
-    let _ = GLOG.log_with_headers(
-        "Invalid token",
-        Level::Error,
-        &device_headers,
-    );
-
-    builder.status(StatusCode::PRECONDITION_FAILED);
-
-    builder.body(
-        "Invalid token".into()
-    ).unwrap()
-}
-
-pub fn unknown_origin(
-    device_headers: &DeviceHeaders,
-    mut builder: response::Builder
-) -> Response<Body>
-{
-    let _ = GLOG.log_with_headers(
-        "Unknown Origin",
-        Level::Error,
-        &device_headers
-    );
-    builder.status(StatusCode::FORBIDDEN);
-    builder.body("Unknown Origin".into()).unwrap()
-}
-
-pub fn bad_device_id(
-    device_headers: &DeviceHeaders,
-    mut builder: response::Builder
-) -> Response<Body>
-{
-    let _ = GLOG.log_with_headers(
-        "Bad D360-Device-Id",
-        Level::Error,
-        &device_headers
-    );
-    builder.status(StatusCode::BAD_REQUEST);
-    builder.body("Bad D360-Device-Id".into()).unwrap()
-}
-
-pub fn internal_server_error(
-    reason: &str,
-) -> Response<Body>
-{
-    let mut builder = response::Builder::new();
-
-    let _ = GLOG.log_without_headers(
-        reason,
-        Level::Error,
-    );
-
-    builder.status(StatusCode::INTERNAL_SERVER_ERROR);
-    builder.body("Internal server error".into()).unwrap()
-}
-
-pub fn service_unavailable(
-) -> Response<Body>
-{
-    let mut builder = response::Builder::new();
-
-    let _ = GLOG.log_without_headers(
-        "Service unavailable",
-        Level::Error,
-    );
-
-    builder.status(StatusCode::SERVICE_UNAVAILABLE);
-    builder.body("Service unavailable".into()).unwrap()
-}
-
-pub fn invalid_payload(
-    mut builder: response::Builder
-) -> Response<Body>
-{
-    let _ = GLOG.log_without_headers(
-        "Invalid payload",
-        Level::Error,
-    );
-    builder.status(StatusCode::BAD_REQUEST);
-    builder.body("Empty payload".into()).unwrap()
+    match error {
+        GatewayError::AppDoesNotExist => {
+            builder.status(StatusCode::FORBIDDEN);
+            builder.body("Unknown app".into()).unwrap()
+        },
+        GatewayError::InvalidToken => {
+            builder.status(StatusCode::PRECONDITION_FAILED);
+            builder.body("Invalid D360-Api-Token".into()).unwrap()
+        },
+        GatewayError::MissingToken => {
+            builder.status(StatusCode::PRECONDITION_FAILED);
+            builder.body("Missing D360-Api-Token".into()).unwrap()
+        },
+        GatewayError::MissingSignature => {
+            builder.status(StatusCode::PRECONDITION_FAILED);
+            builder.body("Missing D360-Signature".into()).unwrap()
+        },
+        GatewayError::InvalidSignature => {
+            builder.status(StatusCode::PRECONDITION_FAILED);
+            builder.body("Invalid D360-Signature".into()).unwrap()
+        },
+        GatewayError::UnknownOrigin => {
+            builder.status(StatusCode::FORBIDDEN);
+            builder.body("Unknown Origin".into()).unwrap()
+        },
+        GatewayError::BadDeviceId => {
+            builder.status(StatusCode::BAD_REQUEST);
+            builder.body("Bad D360-Device-Id".into()).unwrap()
+        },
+        GatewayError::InvalidPayload => {
+            builder.status(StatusCode::BAD_REQUEST);
+            builder.body("Invalid payload".into()).unwrap()
+        },
+        GatewayError::InternalServerError(_) => {
+            builder.status(StatusCode::INTERNAL_SERVER_ERROR);
+            builder.body("Invalid Server Error".into()).unwrap()
+        },
+        GatewayError::ServiceUnavailable(_) => {
+            builder.status(StatusCode::SERVICE_UNAVAILABLE);
+            builder.body("Invalid Server Error".into()).unwrap()
+        },
+    }
 }

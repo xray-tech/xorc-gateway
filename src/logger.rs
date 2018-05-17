@@ -2,8 +2,9 @@ use log::LevelFilter;
 use gelf::{Error, Logger, Message, UdpBackend, Level};
 use std::env;
 use env_logger;
-use headers::DeviceHeaders;
+use context::Context;
 use app_registry::Application;
+use error::GatewayError;
 
 pub struct GelfLogger {
     connection: Option<Logger>,
@@ -73,35 +74,117 @@ impl GelfLogger {
         }
     }
 
-    pub fn log_with_headers(
+    pub fn log_error(
+        &self,
+        error: &GatewayError,
+        context: &Option<Context>
+    ) -> Result<(), Error>
+    {
+        match error {
+            GatewayError::AppDoesNotExist => {
+                self.log_with_context(
+                    "Unknown app",
+                    Level::Error,
+                    context,
+                )
+            },
+            GatewayError::InvalidToken => {
+                self.log_with_context(
+                    "Invalid token",
+                    Level::Error,
+                    context,
+                )
+            },
+            GatewayError::MissingToken => {
+                self.log_with_context(
+                    "Missing token",
+                    Level::Error,
+                    context,
+                )
+            },
+            GatewayError::MissingSignature => {
+                self.log_with_context(
+                    "Missing signature",
+                    Level::Error,
+                    context,
+                )
+            },
+            GatewayError::InvalidSignature => {
+                self.log_with_context(
+                    "Invalid signature",
+                    Level::Error,
+                    context,
+                )
+            },
+            GatewayError::UnknownOrigin => {
+                self.log_with_context(
+                    "Unknown Origin",
+                    Level::Error,
+                    context
+                )
+            },
+            GatewayError::BadDeviceId => {
+                self.log_with_context(
+                    "Bad D360-Device-Id",
+                    Level::Error,
+                    context
+                )
+            },
+            GatewayError::InternalServerError(reason) => {
+                self.log_with_context(
+                    &format!("Internal Server Error: {}", reason),
+                    Level::Error,
+                    context
+                )
+            },
+            GatewayError::ServiceUnavailable(reason) => {
+                self.log_with_context(
+                    &format!("Service unavailable: {}", reason),
+                    Level::Error,
+                    context
+                )
+            },
+            GatewayError::InvalidPayload => {
+                self.log_with_context(
+                    "Invalid payload",
+                    Level::Error,
+                    context
+                )
+            }
+        }
+    }
+
+    pub fn log_with_context(
         &self,
         title: &str,
         level: Level,
-        headers: &DeviceHeaders
+        context: &Option<Context>
     ) -> Result<(), Error>
     {
         let mut msg = Message::new(title.to_string());
         msg.set_level(level);
 
-        if let Some(ref api_token) = headers.api_token {
-            msg.set_metadata("api_token", format!("{}", api_token))?;
-        };
+        if let Some(ref context) = context {
+            if let Some(ref api_token) = context.api_token {
+                msg.set_metadata("api_token", format!("{}", api_token))?;
+            };
 
-        if let Some(ref encrypted) = headers.device_id.ciphertext {
-            msg.set_metadata("encrypted_device_id", format!("{}", encrypted))?;
-        };
+            if let Some(ref encrypted) = context.device_id.ciphertext {
+                msg.set_metadata("encrypted_device_id", format!("{}", encrypted))?;
+            };
 
-        if let Some(ref cleartext) = headers.device_id.cleartext {
-            msg.set_metadata("device_id", format!("{}", cleartext))?;
-        };
+            if let Some(ref cleartext) = context.device_id.cleartext {
+                msg.set_metadata("device_id", format!("{}", cleartext))?;
+            };
 
-        if let Some(ref signature) = headers.signature {
-            msg.set_metadata("signature", format!("{}", signature))?;
-        };
+            if let Some(ref signature) = context.signature {
+                msg.set_metadata("signature", format!("{}", signature))?;
+            };
 
-        if let Some(ref ip) = headers.ip {
-            msg.set_metadata("ip", format!("{}", ip))?;
-        };
+            if let Some(ref ip) = context.ip {
+                msg.set_metadata("ip", format!("{}", ip))?;
+            };
+        }
 
         self.log_message(msg);
 

@@ -1,4 +1,3 @@
-use headers::DeviceHeaders;
 use encryption::Ciphertext;
 
 #[derive(Serialize, Debug)]
@@ -37,12 +36,13 @@ impl<'a> EventResult<'a> {
     pub fn register(
         id: &'a str,
         status: EventStatus,
-        device_headers: &'a DeviceHeaders
+        api_token: &'a Option<String>,
+        ciphertext: &'a Option<Ciphertext>
     ) -> EventResult<'a>
     {
         let registration_data = Some(RegistrationData {
-            api_token: &device_headers.api_token,
-            device_id: &device_headers.device_id.ciphertext,
+            api_token: api_token,
+            device_id: ciphertext,
         });
 
         EventResult {
@@ -55,23 +55,19 @@ impl<'a> EventResult<'a> {
 mod tests {
     use super::*;
     use encryption::*;
-    use headers::{DeviceHeaders, DeviceId};
     use serde_json;
 
     #[test]
     fn test_register_event_result() {
-        let headers = DeviceHeaders {
-            device_id: DeviceId  {
-                ciphertext: Some(Ciphertext::from("encrypted")),
-                cleartext: Some(Cleartext::from("everybody to read")),
-            },
-            api_token: Some("token".to_string()),
-            signature: Some("signature".to_string()),
-            ip: Some("ip".to_string()),
-            origin: None,
-        };
+        let token = Some(String::from("token"));
+        let cipher = Some(Ciphertext::from("encrypted"));
+        let event_result = EventResult::register(
+            "123",
+            EventStatus::Success,
+            &token,
+            &cipher,
+        );
 
-        let event_result = EventResult::register("123", EventStatus::Success, &headers);
         let sdk_response = SDKResponse::from(vec!(event_result));
 
         let json_expected = json!({
