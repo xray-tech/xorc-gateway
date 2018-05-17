@@ -61,6 +61,9 @@ use ::{
 pub struct Gateway {}
 
 impl Gateway {
+    /// ROUTES
+    ///
+    /// Define all the endpoints here.
     fn service(
         req: Request<Body>
     ) -> Box<Future<Item=Response<Body>, Error=GatewayError> + Send + 'static>
@@ -86,6 +89,7 @@ impl Gateway {
         }
     }
 
+    /// Run the service, keeps running until a signal is sent through rx
     pub fn run(rx: oneshot::Receiver<()>) {
         let mut addr_iter = CONFIG.gateway.address.to_socket_addrs().unwrap();
         let addr = addr_iter.next().unwrap();
@@ -112,6 +116,7 @@ impl Gateway {
         runtime.shutdown_on_idle().wait().unwrap();
     }
 
+    /// Prometheus endpoint
     fn handle_metrics(
     ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
     {
@@ -131,6 +136,7 @@ impl Gateway {
         ok(builder.body(buffer.into()).unwrap())
     }
 
+    /// OPTIONS requests
     fn handle_options(
     ) -> impl Future<Item=Response<Body>, Error=GatewayError> + Send + 'static
     {
@@ -145,6 +151,7 @@ impl Gateway {
         ok(builder.body("".into()).unwrap())
     }
 
+    /// Get all possible user information
     fn get_context(
         event: Arc<SDKEventBatch>,
         header_map: Arc<HeaderMap>,
@@ -176,6 +183,7 @@ impl Gateway {
         })))
     }
 
+    /// SDK event handling is here
     fn handle_event<'a>(
         body: Vec<u8>,
         event: Arc<SDKEventBatch>,
@@ -232,6 +240,7 @@ impl Gateway {
             })
     }
 
+    /// The request level SDK event handling
     fn handle_sdk(
         req: Request<Body>
     ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
