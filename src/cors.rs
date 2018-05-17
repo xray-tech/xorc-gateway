@@ -1,13 +1,16 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
     iter::FromIterator,
 };
+use http::{
+    response::Builder,
+    Response,
+    header::{self, HeaderValue}
+};
 
-use http::{response::Builder, Response, header::{self, HeaderValue}};
-
-use config::Config;
 use events::input::Platform;
+
+use ::CONFIG;
 
 pub struct Cors {
     allowed_methods: String,
@@ -16,9 +19,9 @@ pub struct Cors {
 }
 
 impl Cors {
-    pub fn new(config: Arc<Config>) -> Option<Cors> {
-        config.cors.as_ref().map(|ref cors_config| {
-            let allowed_origins: HashMap<String, HashSet<String>> = config.origins
+    pub fn new() -> Option<Cors> {
+        CONFIG.cors.as_ref().map(|ref cors_config| {
+            let allowed_origins: HashMap<String, HashSet<String>> = CONFIG.origins
                 .iter()
                 .fold(HashMap::new(), |mut acc, origin| {
                     acc.insert(
@@ -110,27 +113,17 @@ impl Cors {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use config::Config;
-    use std::sync::Arc;
     use events::input::Platform;
 
     #[test]
-    fn new_with_no_cors_config() {
-        let mut config = Config::parse("config/config.toml.tests");
-        config.cors = None;
-
-        assert!(Cors::new(Arc::new(config)).is_none());
-    }
-
-    #[test]
     fn new_with_cors_config() {
-        let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests")));
+        let cors = Cors::new();
         assert!(cors.is_some());
     }
 
     #[test]
     fn wildcard_headers() {
-        let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests"))).unwrap();
+        let cors = Cors::new().unwrap();
 
         let response = cors.response_builder_wildcard().body("").unwrap();
 
@@ -154,7 +147,7 @@ mod tests {
 
     #[test]
     fn headers_for_existing_app_from_allowed_origin() {
-        let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests"))).unwrap();
+        let cors = Cors::new().unwrap();
 
         let response = cors.response_builder_origin(
             "2",
@@ -183,7 +176,7 @@ mod tests {
 
     #[test]
     fn headers_for_existing_app_from_wrong_origin() {
-        let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests"))).unwrap();
+        let cors = Cors::new().unwrap();
 
         let response = cors.response_builder_origin(
             "2",
@@ -198,7 +191,7 @@ mod tests {
 
     #[test]
     fn headers_for_non_existing_app() {
-        let cors = Cors::new(Arc::new(Config::parse("config/config.toml.tests"))).unwrap();
+        let cors = Cors::new().unwrap();
 
         let response = cors.response_builder_origin(
             "3",

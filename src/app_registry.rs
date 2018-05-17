@@ -10,7 +10,6 @@ use std::{
 };
 
 use base64;
-use config::Config;
 use ring::{hmac, digest};
 use error::GatewayError;
 use events::input;
@@ -19,7 +18,7 @@ use crossbeam::sync::ArcCell;
 use r2d2;
 use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 use hex;
-use ::GLOG;
+use ::{GLOG, CONFIG};
 
 pub struct Application {
     pub id: i32,
@@ -33,7 +32,6 @@ pub struct AppRegistry {
     allow_empty_signature: bool,
     apps: ArcCell<HashMap<String, Application>>,
     pool: Option<r2d2::Pool<PostgresConnectionManager>>,
-    config: Arc<Config>,
 }
 
 lazy_static! {
@@ -64,8 +62,8 @@ impl AppRegistry {
     /// Alternatively one can have `[[test_apps]]` with `app_id`, `token`,
     /// `secret_ios`, `secret_android` and `secret_web`. If any of these is
     /// missing, the system will not allow requests for those platforms.
-    pub fn new(config: Arc<Config>) -> AppRegistry {
-        if let Some(psql_config) = config.clone().postgres.as_ref() {
+    pub fn new() -> AppRegistry {
+        if let Some(psql_config) = CONFIG.postgres.as_ref() {
             info!("Apps loaded form PostgreSQL CRM database.");
 
             let manager = PostgresConnectionManager::new(
@@ -81,8 +79,7 @@ impl AppRegistry {
                 .build(manager).expect("Couldn't create a PostgreSQL connection pool");
 
             let registry = AppRegistry {
-                allow_empty_signature: config.gateway.allow_empty_signature,
-                config: config,
+                allow_empty_signature: CONFIG.gateway.allow_empty_signature,
                 pool: Some(pool),
                 apps: ArcCell::new(Arc::new(HashMap::new())),
             };
@@ -93,7 +90,7 @@ impl AppRegistry {
         } else {
             warn!("Apps loaded form configuration file. Development only!");
 
-            let apps = config.test_apps
+            let apps = CONFIG.test_apps
                 .iter()
                 .fold(HashMap::new(), |mut acc, test_app| {
                     let ios_secret = test_app
@@ -125,8 +122,7 @@ impl AppRegistry {
                 });
 
             AppRegistry {
-                allow_empty_signature: config.gateway.allow_empty_signature,
-                config: config,
+                allow_empty_signature: CONFIG.gateway.allow_empty_signature,
                 pool: None,
                 apps: ArcCell::new(Arc::new(apps)),
             }
@@ -158,7 +154,7 @@ impl AppRegistry {
         let valid_token = app
             .token
             .as_ref()
-            .unwrap_or(&self.config.gateway.default_token);
+            .unwrap_or(&CONFIG.gateway.default_token);
 
         let sent_token = context
             .api_token
@@ -310,14 +306,6 @@ mod tests {
     const WEB_SECRET: &'static str =
         "4c553960fdc2a82f90b84f6ef188e836818fcee2c43a6c32bd6c91f41772657f";
 
-    lazy_static! {
-        static ref CONFIG: Arc<Config> =
-            Arc::new(Config::parse("config/config.toml.tests"));
-
-        static ref APP_REGISTRY: AppRegistry =
-            AppRegistry::new(CONFIG.clone());
-    }
-
     #[test]
     fn test_app_creation_empty_secrets() {
         let app = AppRegistry::create_app(420, None, None, None, None);
@@ -389,8 +377,9 @@ mod tests {
         );
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let app_registry = AppRegistry::new();
 
-        let validation = APP_REGISTRY.validate(
+        let validation = app_registry.validate(
             "1",
             &context,
             &Platform::Ios,
@@ -432,7 +421,8 @@ mod tests {
         );
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
-        let validation = APP_REGISTRY.validate(
+        let app_registry = AppRegistry::new();
+        let validation = app_registry.validate(
             "1",
             &context,
             &Platform::Android,
@@ -473,7 +463,8 @@ mod tests {
         );
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
-        let validation = APP_REGISTRY.validate(
+        let app_registry = AppRegistry::new();
+        let validation = app_registry.validate(
             "1",
             &context,
             &Platform::Web,
@@ -500,9 +491,11 @@ mod tests {
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
 
+        let app_registry = AppRegistry::new();
+
         assert_eq!(
             Err(GatewayError::AppDoesNotExist),
-            APP_REGISTRY.validate(
+            app_registry.validate(
                 "2",
                 &context,
                 &Platform::Web,
@@ -523,10 +516,11 @@ mod tests {
         );
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let app_registry = AppRegistry::new();
 
         assert_eq!(
             Err(GatewayError::MissingToken),
-            APP_REGISTRY.validate(
+            app_registry.validate(
                 "1",
                 &context,
                 &Platform::Web,
@@ -551,10 +545,11 @@ mod tests {
         );
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let app_registry = AppRegistry::new();
 
         assert_eq!(
             Err(GatewayError::InvalidToken),
-            APP_REGISTRY.validate(
+            app_registry.validate(
                 "1",
                 &context,
                 &Platform::Web,
@@ -573,29 +568,8 @@ mod tests {
         );
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
-        let validation = APP_REGISTRY.validate(
-            "1",
-            &context,
-            &Platform::Web,
-            "kulli".as_bytes()
-        );
+        let app_registry = AppRegistry::new();
 
-        assert_eq!(Err(GatewayError::MissingSignature), validation);
-    }
-
-    #[test]
-    fn test_validate_missing_signature_if_allowed() {
-        let mut config = Config::parse("config/config.toml.tests");
-        config.gateway.allow_empty_signature = true;
-        let app_registry = AppRegistry::new(Arc::new(config));
-        let mut header_map = HeaderMap::new();
-
-        header_map.insert(
-            "D360-Api-Token",
-            HeaderValue::from_static(TOKEN),
-        );
-
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
         let validation = app_registry.validate(
             "1",
             &context,
@@ -603,7 +577,7 @@ mod tests {
             "kulli".as_bytes()
         );
 
-        assert!(validation.is_ok());
+        assert_eq!(Err(GatewayError::MissingSignature), validation);
     }
 
     #[test]
@@ -622,7 +596,9 @@ mod tests {
         );
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
-        let validation = APP_REGISTRY.validate(
+        let app_registry = AppRegistry::new();
+
+        let validation = app_registry.validate(
             "1",
             &context,
             &Platform::Unknown,
@@ -649,7 +625,9 @@ mod tests {
         );
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
-        let validation = APP_REGISTRY.validate(
+        let app_registry = AppRegistry::new();
+
+        let validation = app_registry.validate(
             "1",
             &context,
             &Platform::Android,

@@ -46,40 +46,37 @@ use tokio_threadpool::{
 };
 
 use serde_json;
-use config::Config;
 use error::{self, GatewayError};
 use context::Context;
 use tokio::runtime::{Builder as RuntimeBuilder};
-use app_registry::AppRegistry;
-use entity_storage::EntityStorage;
-use cors::Cors;
-use ::GLOG;
 
-pub struct Gateway {
-    config: Arc<Config>,
-    cors: Arc<Option<Cors>>,
-    app_registry: Arc<AppRegistry>,
-    entity_storage: Arc<Option<EntityStorage>>,
-}
+use ::{
+    GLOG,
+    APP_REGISTRY,
+    CORS,
+    CONFIG,
+    ENTITY_STORAGE
+};
+
+pub struct Gateway {}
 
 impl Gateway {
     fn service(
-        &self, 
         req: Request<Body>
     ) -> Box<Future<Item=Response<Body>, Error=GatewayError> + Send + 'static>
     {
         match (req.method(), req.uri().path()) {
             // SDK OPTIONS request
             (&Method::OPTIONS, "/") => {
-                Box::new(self.handle_options())
+                Box::new(Self::handle_options())
             },
             // SDK events main path
             (&Method::POST, "/") => {
-                Box::new(self.handle_sdk(req))
+                Box::new(Self::handle_sdk(req))
             },
             // Prometheus metrics
             (&Method::GET, "/watchdog") => {
-                Box::new(self.handle_metrics())
+                Box::new(Self::handle_metrics())
             },
             _ => {
                 let mut res = Response::new(Body::empty());
@@ -89,42 +86,23 @@ impl Gateway {
         }
     }
 
-    pub fn new(
-        config: Arc<Config>,
-        app_registry: Arc<AppRegistry>,
-        entity_storage: Arc<Option<EntityStorage>>,
-    ) -> Gateway
-    {
-        let cors = Arc::new(Cors::new(config.clone()));
-
-        Gateway {
-            config,
-            cors,
-            app_registry,
-            entity_storage,
-        }
-    }
-
-    pub fn run(self, rx: oneshot::Receiver<()>) {
-        let mut addr_iter = self.config.gateway.address.to_socket_addrs().unwrap();
+    pub fn run(rx: oneshot::Receiver<()>) {
+        let mut addr_iter = CONFIG.gateway.address.to_socket_addrs().unwrap();
         let addr = addr_iter.next().unwrap();
 
         let mut threadpool_builder = tokio_threadpool::Builder::new();
         threadpool_builder
-            .name_prefix(self.config.gateway.process_name_prefix.clone())
+            .name_prefix(CONFIG.gateway.process_name_prefix.clone())
             .pool_size(4);
 
         let mut runtime = RuntimeBuilder::new()
             .threadpool_builder(threadpool_builder)
             .build().unwrap();
 
-        let gateway = Arc::new(self);
-
         let server = Server::bind(&addr)
             .serve(move || {
-                let gw = gateway.clone();
                 service_fn(move |req: Request<Body>| {
-                    gw.service(req)
+                    Self::service(req)
                 })
             })
             .map_err(|e| println!("server error: {}", e));
@@ -135,7 +113,6 @@ impl Gateway {
     }
 
     fn handle_metrics(
-        &self,
     ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
     {
         let encoder = TextEncoder::new();
@@ -155,11 +132,10 @@ impl Gateway {
     }
 
     fn handle_options(
-        &self
     ) -> impl Future<Item=Response<Body>, Error=GatewayError> + Send + 'static
     {
         let mut builder =
-            if let Some(ref cors) = *self.cors {
+            if let Some(ref cors) = *CORS {
                 cors.response_builder_wildcard()
             } else {
                 Response::builder()
@@ -172,11 +148,10 @@ impl Gateway {
     fn get_context(
         event: Arc<SDKEventBatch>,
         header_map: Arc<HeaderMap>,
-        entity_storage: Arc<Option<EntityStorage>>
     ) -> impl Future<Item=Context, Error=BlockingError> + 'static + Send
     {
         lazy(move || poll_fn(move || blocking(|| {
-            match *entity_storage {
+            match *ENTITY_STORAGE {
                 Some(ref es) => {
                     let fun = || es.get_id_for_ifa(&event.environment.app_id, &event.device);
 
@@ -203,14 +178,11 @@ impl Gateway {
 
     fn handle_event<'a>(
         body: Vec<u8>,
-        cors: Arc<Option<Cors>>,
-        app_registry: Arc<AppRegistry>,
         event: Arc<SDKEventBatch>,
         headers: Arc<HeaderMap>,
-        entity_storage: Arc<Option<EntityStorage>>
     ) -> impl Future<Item=(String, Context), Error=(GatewayError, Option<Context>)> + 'static + Send
     {
-        Self::get_context(event.clone(), headers.clone(), entity_storage.clone())
+        Self::get_context(event.clone(), headers.clone())
             .map_err(|_| {
                 (GatewayError::ServiceUnavailable("Too many pending requests to Aerospike"), None)
             })
@@ -219,7 +191,7 @@ impl Gateway {
                     return err((GatewayError::BadDeviceId, Some(context)))
                 }
 
-                if let Some(ref cors) = *cors {
+                if let Some(ref cors) = *CORS {
                     if event.device.platform() == Platform::Web {
                         if !cors.valid_origin(&context.app_id, context.origin.as_ref().map(|x| &**x)) {
                             return err((GatewayError::UnknownOrigin, Some(context)))
@@ -227,7 +199,7 @@ impl Gateway {
                     }
                 }
 
-                let validation = app_registry.validate(
+                let validation = APP_REGISTRY.validate(
                     &event.environment.app_id,
                     &context,
                     &event.device.platform(),
@@ -261,15 +233,9 @@ impl Gateway {
     }
 
     fn handle_sdk(
-        &self,
         req: Request<Body>
     ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
     {
-        let handle_event_cors = self.cors.clone();
-        let ok_response_cors = self.cors.clone();
-        let err_response_cors = self.cors.clone();
-        let app_registry = self.app_registry.clone();
-        let entity_storage = self.entity_storage.clone();
         let (head, body) = req.into_parts();
         let headers = Arc::new(head.headers);
 
@@ -280,11 +246,8 @@ impl Gateway {
                 if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body).map(|e| Arc::new(e)) {
                     Either::A(Self::handle_event(
                         body.to_vec(),
-                        handle_event_cors,
-                        app_registry,
                         event,
                         headers.clone(),
-                        entity_storage,
                     ))
                 } else {
                     Either::B(err((GatewayError::InvalidPayload, None)))
@@ -296,7 +259,7 @@ impl Gateway {
                         let json_body = serde_json::to_string(&sdk_response).unwrap();
 
                         let mut builder =
-                            if let Some(ref cors) = *ok_response_cors {
+                            if let Some(ref cors) = *CORS {
                                 cors.response_builder_origin(
                                     &context.app_id,
                                     context.origin.as_ref().map(|x| &**x),
@@ -311,7 +274,7 @@ impl Gateway {
                     },
                     Err((e, context)) => {
                         let _ = GLOG.log_error(&e, &context);
-                        ok(error::into_response(e, context, &*err_response_cors))
+                        ok(error::into_response(e, context))
                     },
                 }
             })

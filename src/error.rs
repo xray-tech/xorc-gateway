@@ -1,6 +1,5 @@
 use context::Context;
 use http::response;
-use cors::Cors;
 use std::{error::Error, fmt};
 
 use hyper::{
@@ -8,6 +7,8 @@ use hyper::{
     Body,
     StatusCode,
 };
+
+use ::CORS;
 
 #[derive(Debug, PartialEq)]
 pub enum GatewayError {
@@ -60,9 +61,8 @@ impl Error for GatewayError {
     }
 }
 
-fn response_builder_for(context: &Option<Context>, cors: &Option<Cors>) -> response::Builder
-{
-    if let Some(cors) = cors {
+fn response_builder_for(context: &Option<Context>) -> response::Builder {
+    if let Some(ref cors) = *CORS {
         if let Some(context) = context {
             return cors.response_builder_origin(
                 &context.app_id,
@@ -78,9 +78,8 @@ fn response_builder_for(context: &Option<Context>, cors: &Option<Cors>) -> respo
 pub fn into_response(
     error: GatewayError,
     context: Option<Context>,
-    cors: &Option<Cors>
 ) -> Response<Body> {
-    let mut builder = response_builder_for(&context, cors);
+    let mut builder = response_builder_for(&context);
 
     match error {
         GatewayError::AppDoesNotExist => {

@@ -59,6 +59,7 @@ use app_registry::AppRegistry;
 use config::Config;
 use chan_signal::{notify, Signal};
 use futures::sync::oneshot;
+use cors::Cors;
 
 use std::{
     sync::{
@@ -66,11 +67,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
-};
-
-use argparse::{
-    ArgumentParser,
-    Store,
+    env,
 };
 
 lazy_static! {
@@ -78,52 +75,43 @@ lazy_static! {
         logger::GelfLogger::new().unwrap();
 }
 
+lazy_static! {
+    static ref CONFIG: Config =
+        match env::var("CONFIG") {
+            Ok(config_file_location) => {
+                Config::parse(&config_file_location)
+            },
+            _ => {
+                Config::parse("./config/config.toml")
+            }
+        };
+
+    static ref APP_REGISTRY: AppRegistry = AppRegistry::new();
+    static ref CORS: Option<Cors> = Cors::new();
+    static ref ENTITY_STORAGE: Option<EntityStorage> =
+        CONFIG.aerospike.as_ref().map(|ref as_config| EntityStorage::new(as_config));
+}
+
 fn main() {
-    let mut config_file_location = String::from("./config/config.toml");
     let exit_signal = notify(&[Signal::INT, Signal::TERM]);
-
-    {
-        let mut ap = ArgumentParser::new();
-        ap.set_description("SDK Gateway");
-        ap.refer(&mut config_file_location).add_option(
-            &["-c", "--config"],
-            Store,
-            "Config file (default: config.toml)",
-        );
-        ap.parse_args_or_exit();
-    }
-
     let control = Arc::new(AtomicBool::new(true));
-    let config = Arc::new(Config::parse(&config_file_location));
-    let app_registry = Arc::new(AppRegistry::new(config.clone()));
-
-    let entity_storage = Arc::new(
-        config.aerospike.as_ref().map(|ref as_config| EntityStorage::new(as_config))
-    );
 
     let mut threads: Vec<JoinHandle<_>> = Vec::new();
     let (server_tx, server_rx) = oneshot::channel();
 
     threads.push({
-        let registry = app_registry.clone();
         let control = control.clone();
         thread::spawn(move || {
             info!("Starting the app registry thread...");
-            registry.run_updater(control);
+            APP_REGISTRY.run_updater(control);
             info!("Exiting the app registry thread...");
         })
     });
 
     threads.push({
-        let gateway = Gateway::new(
-            config.clone(),
-            app_registry.clone(),
-            entity_storage.clone(),
-        );
-
         thread::spawn(move || {
             info!("Starting the SDK gateway thread...");
-            gateway.run(server_rx);
+            Gateway::run(server_rx);
             info!("Exiting the SDK gateway thread...");
         })
     });
