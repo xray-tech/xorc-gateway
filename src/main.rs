@@ -82,7 +82,7 @@ lazy_static! {
                 Config::parse(&config_file_location)
             },
             _ => {
-                Config::parse("./config/config.toml")
+                Config::parse("./config/config.toml.tests")
             }
         };
 

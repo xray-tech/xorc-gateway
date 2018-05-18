@@ -4,6 +4,7 @@ use rand::{RngCore, thread_rng};
 use http::{header::{self, AsHeaderName}};
 use encryption::{Ciphertext, Cleartext};
 use events::input::Platform;
+use std::net::IpAddr;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Context {
@@ -12,7 +13,7 @@ pub struct Context {
     pub api_token: Option<String>,
     pub device_id: DeviceId,
     pub signature: Option<String>,
-    pub ip: Option<String>,
+    pub ip: Option<IpAddr>,
     pub origin: Option<String>,
 }
 
@@ -74,13 +75,18 @@ impl Context {
             }
         };
 
+        let ip_addr: Option<IpAddr> = headers
+            .get("X-Real-IP")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|s| s.parse().ok());
+
         Context {
             api_token: Self::get_value(&headers, "D360-Api-Token"),
             app_id: String::from(app_id),
             platform: platform,
             device_id: device_id,
             signature: Self::get_value(&headers, "D360-Signature"),
-            ip: Self::get_value(&headers, "X-Real-IP"),
+            ip: ip_addr,
             origin: Self::get_value(&headers, header::ORIGIN)
         }
     }
@@ -120,6 +126,7 @@ mod tests {
     use super::*;
     use hyper::HeaderMap;
     use http::header::HeaderValue;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
     #[test]
     fn test_empty_ip_address() {
@@ -130,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn test_existing_ip_address() {
+    fn test_existing_ipv4_address() {
         let mut header_map = HeaderMap::new();
         let ip = "1.1.1.1";
 
@@ -141,7 +148,22 @@ mod tests {
 
         let context = Context::new(&header_map, "123", Platform::Ios, || None);
 
-        assert_eq!(context.ip, Some(ip.to_string()));
+        assert_eq!(context.ip, Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))));
+    }
+
+    #[test]
+    fn test_existing_ipv6_address() {
+        let mut header_map = HeaderMap::new();
+        let ip = "::1";
+
+        header_map.insert(
+            "x-real-ip",
+            HeaderValue::from_static(ip),
+        );
+
+        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+
+        assert_eq!(context.ip, Some(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))));
     }
 
     #[test]

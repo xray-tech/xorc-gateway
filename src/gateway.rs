@@ -154,7 +154,6 @@ impl Gateway {
             match *ENTITY_STORAGE {
                 Some(ref es) => {
                     let fun = || es.get_id_for_ifa(&event.environment.app_id, &event.device);
-
                     Context::new(
                         &*header_map,
                         &event.environment.app_id,
@@ -163,8 +162,9 @@ impl Gateway {
                     )
                 },
                 None => {
-                    let fun = || None;
+                    warn!("Aerospike is disabled, should only happen in a development environment.");
 
+                    let fun = || None;
                     Context::new(
                         &*header_map,
                         &event.environment.app_id,
