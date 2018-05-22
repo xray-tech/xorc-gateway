@@ -184,7 +184,7 @@ impl Gateway {
     }
 
     /// SDK event handling is here
-    fn handle_event<'a>(
+    fn handle_event(
         body: Vec<u8>,
         event: Arc<SDKEventBatch>,
         headers: Arc<HeaderMap>,

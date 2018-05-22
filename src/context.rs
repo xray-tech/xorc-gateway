@@ -23,21 +23,24 @@ pub struct DeviceId {
     pub cleartext: Option<Cleartext>,
 }
 
+
+/// All the information we could gather about the request. Should be passed on
+/// through the whole lifetime of the request.
+///
+/// If `D360-Device-Id` is not included in the request, uses the given closure
+/// to find a device id for the user. If the header exists, it's expected to be
+/// encrypted using AES-256-GCM AEAD encryption.
+///
+/// Possibilities with the incoming device-id:
+///
+/// - Exists and valid: unencrypted and stored to the struct and we should
+///   continue
+/// - Exists but invalid: cleartext not stored to the struct, user should
+///   get an error
+/// - Empty: try using the given closure to fetch the id, then encrypting
+///   it. If closure doesn't give any id for the device, we generate one using
+///   UUID version4 (random)
 impl Context {
-    /// Creates a structure of device information from request headers. If
-    /// `D360-Device-Id` is not included in the request, uses the given closure
-    /// to find a device id for the user. If the header exists, it's expected to
-    /// be encrypted using AES-256-GCM AEAD encryption.
-    ///
-    /// Possibilities with the incoming device-id:
-    ///
-    /// - Exists and valid: unencrypted and stored to the struct and we should
-    ///   continue
-    /// - Exists but invalid: cleartext not stored to the struct, user should
-    ///   get an error
-    /// - Empty: try using the given closure to fetch the id, then encrypting
-    ///   it. If closure doesn't give any id for the device, we generate one using
-    ///   UUID version4 (random)
     pub fn new<F>(
         headers: &HeaderMap,
         app_id: &str,
