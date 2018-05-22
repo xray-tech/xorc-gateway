@@ -37,6 +37,7 @@ indoc = "0.2"
 crossbeam = "0.3"
 aerospike = "0.2"
 prometheus = { git = "https://github.com/flier/rust-prometheus.git", branch = "protobuf-1.6" }
+maxminddb = "0.8.1"
 
 [build-dependencies]
 prost-build = "0.3"
