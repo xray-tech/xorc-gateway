@@ -4,15 +4,18 @@ use events::input::SDKDevice;
 use std::{
     time::Duration,
     thread,
+    io
 };
 
+// OCD...
 use aerospike::{
-    Client,
-    ReadPolicy,
-    ClientPolicy,
     Error,
+    Client,
     ErrorKind,
     ResultCode,
+    ReadPolicy,
+    WritePolicy,
+    ClientPolicy,
 };
 
 pub struct EntityStorage {
@@ -35,7 +38,12 @@ impl EntityStorage {
         }
     }
 
-    pub fn get_id_for_ifa<'a>(&self, app_id: &str, device: &'a SDKDevice) -> Option<String> {
+    pub fn get_id_for_ifa<'a>(
+        &self,
+        app_id: &str,
+        device: &'a SDKDevice
+    ) -> Option<String>
+    {
         match device.ifa {
             Some(ref ifa) if
                 device.ifa_tracking_enabled == true &&
@@ -68,6 +76,56 @@ impl EntityStorage {
                 None
             },
             _ => None
+        }
+    }
+
+    pub fn put_id_for_ifa<'a>(
+        &self,
+        app_id: &str,
+        device: &'a SDKDevice
+    ) -> Result<(), io::Error>
+    {
+        match device.ifa {
+            Some(ref ifa) if
+                device.ifa_tracking_enabled == true &&
+                ifa != "00000000-0000-0000-0000-000000000000" =>
+            {
+                let key = as_key!(
+                    self.namespace.clone(),
+                    String::from("gw_known_ifas"),
+                    format!("{}@{}", ifa, app_id)
+                );
+
+                let bin = as_bin!("entity_id", 1)
+
+                let mut back_off = Duration::from_millis(1);
+
+                for _ in 0..5 {
+                    match self.client.put(&WritePolicy::default(), &key, ["entity_id"]) {
+                        Ok(record) =>
+                            return record.bins.get("entity_id").map(|v| v.as_string()),
+                        Err(Error(ErrorKind::ServerError(ResultCode::KeyNotFoundError), _)) =>
+                            return None,
+                        Err(e) => {
+                            warn!("Error reading known ifa, retrying: [{:?}]", e);
+                            thread::park_timeout(back_off);
+                            back_off += Duration::from_millis(1);
+                        }
+                    }
+                }
+
+                error!("Could not read known ifa.");
+
+                None
+            },
+            _ => {
+                Err(
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "IFA storage is not allowed or ifa was faulty"
+                    )
+                )
+            }
         }
     }
 }

@@ -73,9 +73,6 @@ use std::{
 lazy_static! {
     pub static ref GLOG: logger::GelfLogger =
         logger::GelfLogger::new().unwrap();
-}
-
-lazy_static! {
     static ref CONFIG: Config =
         match env::var("CONFIG") {
             Ok(config_file_location) => {

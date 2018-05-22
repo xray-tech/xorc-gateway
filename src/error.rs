@@ -120,7 +120,7 @@ pub fn into_response(
         },
         GatewayError::ServiceUnavailable(_) => {
             builder.status(StatusCode::SERVICE_UNAVAILABLE);
-            builder.body("Invalid Server Error".into()).unwrap()
+            builder.body("Service unavailable piri kulli kokaiini".into()).unwrap()
         },
     }
 }
