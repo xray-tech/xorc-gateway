@@ -21,7 +21,6 @@ impl Into<output::events::SdkEventBatch> for SDKEventBatch {
             },
             environment: Some(self.environment.into()),
             device: Some(self.device.into()),
-            event: self.events.into_iter().map(|ev| ev.into()).collect(),
             ..Default::default()
         }
     }

@@ -4,7 +4,7 @@ use toml;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    //pub kafka: KafkaConfig,
+    pub kafka: KafkaConfig,
     pub gateway: GatewayConfig,
     pub cors: Option<CorsConfig>,
     pub origins: Vec<OriginConfig>,
@@ -76,14 +76,8 @@ pub struct AerospikeConfig {
     pub namespace: String,
 }
 
-/*
 #[derive(Deserialize, Debug)]
 pub struct KafkaConfig {
-    pub input_topic: String,
-    pub config_topic: String,
-    pub output_topic: String,
-    pub retry_topic: String,
-    pub group_id: String,
+    pub topic: String,
     pub brokers: String,
 }
-*/

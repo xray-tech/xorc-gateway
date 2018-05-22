@@ -1,5 +1,6 @@
 use config::AerospikeConfig;
 use events::input::SDKDevice;
+use encryption::Cleartext;
 
 use std::{
     time::Duration,
@@ -82,6 +83,7 @@ impl EntityStorage {
     pub fn put_id_for_ifa<'a>(
         &self,
         app_id: &str,
+        device_id: &Cleartext,
         device: &'a SDKDevice
     ) -> Result<(), io::Error>
     {
@@ -96,27 +98,26 @@ impl EntityStorage {
                     format!("{}@{}", ifa, app_id)
                 );
 
-                let bin = as_bin!("entity_id", 1)
+                let bin = as_bin!(
+                    "entity_id",
+                    device_id.as_ref()
+                );
 
                 let mut back_off = Duration::from_millis(1);
 
                 for _ in 0..5 {
-                    match self.client.put(&WritePolicy::default(), &key, ["entity_id"]) {
-                        Ok(record) =>
-                            return record.bins.get("entity_id").map(|v| v.as_string()),
-                        Err(Error(ErrorKind::ServerError(ResultCode::KeyNotFoundError), _)) =>
-                            return None,
+                    match self.client.put(&WritePolicy::default(), &key, &[&bin]) {
+                        Ok(_) =>
+                            return Ok(()),
                         Err(e) => {
-                            warn!("Error reading known ifa, retrying: [{:?}]", e);
+                            warn!("Error serializing known ifa, retrying: [{:?}]", e);
                             thread::park_timeout(back_off);
                             back_off += Duration::from_millis(1);
                         }
                     }
                 }
 
-                error!("Could not read known ifa.");
-
-                None
+                panic!("Could not write known ifa. Aborting!")
             },
             _ => {
                 Err(

@@ -7,18 +7,18 @@ pub enum EventStatus {
 }
 
 #[derive(Serialize, Debug)]
-pub struct RegistrationData<'a> {
-    api_token: &'a Option<String>,
-    device_id: &'a Option<Ciphertext>,
+pub struct RegistrationData {
+    api_token: Option<String>,
+    device_id: Ciphertext,
 }
 
 #[derive(Serialize, Debug)]
-pub struct SDKResponse<'a> {
-    events_status: Vec<EventResult<'a>>
+pub struct SDKResponse {
+    events_status: Vec<EventResult>
 }
 
-impl<'a> From<Vec<EventResult<'a>>> for SDKResponse<'a> {
-    fn from(events_status: Vec<EventResult<'a>>) -> SDKResponse<'a> {
+impl From<Vec<EventResult>> for SDKResponse {
+    fn from(events_status: Vec<EventResult>) -> SDKResponse {
         SDKResponse {
             events_status
         }
@@ -26,19 +26,27 @@ impl<'a> From<Vec<EventResult<'a>>> for SDKResponse<'a> {
 }
 
 #[derive(Serialize, Debug)]
-pub struct EventResult<'a> {
-    pub id: &'a str,
-    pub registration_data: Option<RegistrationData<'a>>,
+pub struct EventResult {
+    pub id: String,
+    pub registration_data: Option<RegistrationData>,
     pub status: EventStatus,
 }
 
-impl<'a> EventResult<'a> {
+impl EventResult {
+    pub fn new(id: String, status: EventStatus) -> EventResult {
+        EventResult {
+            id: id,
+            registration_data: None,
+            status: status,
+        }
+    }
+
     pub fn register(
-        id: &'a str,
+        id: String,
         status: EventStatus,
-        api_token: &'a Option<String>,
-        ciphertext: &'a Option<Ciphertext>
-    ) -> EventResult<'a>
+        api_token: Option<String>,
+        ciphertext: Ciphertext,
+    ) -> EventResult
     {
         let registration_data = Some(RegistrationData {
             api_token: api_token,
@@ -46,7 +54,9 @@ impl<'a> EventResult<'a> {
         });
 
         EventResult {
-            id, status, registration_data,
+            id,
+            status,
+            registration_data,
         }
     }
 }
@@ -60,7 +70,7 @@ mod tests {
     #[test]
     fn test_register_event_result() {
         let token = Some(String::from("token"));
-        let cipher = Some(Ciphertext::from("encrypted"));
+        let cipher = Ciphertext::from("encrypted");
         let event_result = EventResult::register(
             "123",
             EventStatus::Success,

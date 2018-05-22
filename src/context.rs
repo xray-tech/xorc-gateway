@@ -11,7 +11,7 @@ pub struct Context {
     pub app_id: String,
     pub platform: Platform,
     pub api_token: Option<String>,
-    pub device_id: DeviceId,
+    pub device_id: Option<DeviceId>,
     pub signature: Option<String>,
     pub ip: Option<IpAddr>,
     pub origin: Option<String>,
@@ -19,10 +19,28 @@ pub struct Context {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DeviceId {
-    pub ciphertext: Option<Ciphertext>,
-    pub cleartext: Option<Cleartext>,
+    pub ciphertext: Ciphertext,
+    pub cleartext: Cleartext,
 }
 
+
+impl DeviceId {
+    pub fn generate() -> DeviceId {
+        let mut uuid = [0u8; 16];
+        thread_rng().fill_bytes(&mut uuid);
+
+        let cleartext = Cleartext::from(
+            Uuid::new_v4().hyphenated().to_string()
+        );
+
+        let ciphertext = Ciphertext::encrypt(&cleartext);
+
+        DeviceId {
+            ciphertext: ciphertext,
+            cleartext: cleartext,
+        }
+    }
+}
 
 /// All the information we could gather about the request. Should be passed on
 /// through the whole lifetime of the request.
@@ -41,42 +59,26 @@ pub struct DeviceId {
 ///   it. If closure doesn't give any id for the device, we generate one using
 ///   UUID version4 (random)
 impl Context {
-    pub fn new<F>(
+    pub fn new(
         headers: &HeaderMap,
         app_id: &str,
         platform: Platform,
-        fetch_device_id: F,
     ) -> Context
-    where
-        F: FnOnce() -> Option<String>
     {
-        let device_id = match Self::get_value(&headers, "D360-Device-Id") {
-            Some(ciphertext) => {
-                let ciphertext = Ciphertext::from(ciphertext);
-                let cleartext = Cleartext::decrypt(&ciphertext);
+        let device_id = Self::get_value(&headers, "D360-Device-Id")
+            .and_then(|s| {
+                let ciphertext = Ciphertext::from(s);
 
-                DeviceId {
-                    ciphertext: Some(ciphertext),
-                    cleartext: cleartext.ok(),
-                }
-            }
-            _ => {
-                match fetch_device_id() {
-                    Some(entity_id) => {
-                        let cleartext = Cleartext::from(entity_id);
-                        let ciphertext = Ciphertext::encrypt(&cleartext);
-
-                        DeviceId {
-                            ciphertext: Some(ciphertext),
-                            cleartext: Some(cleartext),
-                        }
+                match Cleartext::decrypt(&ciphertext) {
+                    Ok(cleartext) => {
+                        Some(DeviceId {
+                            ciphertext: ciphertext,
+                            cleartext: cleartext,
+                        })
                     },
-                    _ => {
-                        Self::create_new_id()
-                    }
+                    _ => None
                 }
-            }
-        };
+            });
 
         let ip_addr: Option<IpAddr> = headers
             .get("X-Real-IP")
@@ -106,22 +108,6 @@ impl Context {
             .and_then(|h| h.to_str().ok())
             .map(|s| String::from(s))
     }
-
-    fn create_new_id() -> DeviceId {
-        let mut uuid = [0u8; 16];
-        thread_rng().fill_bytes(&mut uuid);
-
-        let cleartext = Cleartext::from(
-            Uuid::new_v4().hyphenated().to_string()
-        );
-
-        let ciphertext = Ciphertext::encrypt(&cleartext);
-
-        DeviceId {
-            ciphertext: Some(ciphertext),
-            cleartext: Some(cleartext),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -130,11 +116,12 @@ mod tests {
     use hyper::HeaderMap;
     use http::header::HeaderValue;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+    use error::GatewayError;
 
     #[test]
     fn test_empty_ip_address() {
         let header_map = HeaderMap::new();
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert!(context.ip.is_none());
     }
@@ -149,7 +136,7 @@ mod tests {
             HeaderValue::from_static(ip),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert_eq!(context.ip, Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))));
     }
@@ -164,7 +151,7 @@ mod tests {
             HeaderValue::from_static(ip),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert_eq!(context.ip, Some(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))));
     }
@@ -172,7 +159,7 @@ mod tests {
     #[test]
     fn test_empty_api_token() {
         let header_map = HeaderMap::new();
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert!(context.api_token.is_none());
     }
@@ -187,7 +174,7 @@ mod tests {
             HeaderValue::from_static(token),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert_eq!(context.api_token, Some(token.to_string()));
     }
@@ -195,7 +182,7 @@ mod tests {
     #[test]
     fn test_empty_signature() {
         let header_map = HeaderMap::new();
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert!(context.signature.is_none());
     }
@@ -210,7 +197,7 @@ mod tests {
             HeaderValue::from_static(signature),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert_eq!(context.signature, Some(signature.to_string()));
     }
@@ -218,7 +205,7 @@ mod tests {
     #[test]
     fn test_empty_origin() {
         let header_map = HeaderMap::new();
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert!(context.origin.is_none());
     }
@@ -233,7 +220,7 @@ mod tests {
             HeaderValue::from_static(origin),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert_eq!(context.origin, Some(origin.to_string()));
     }
@@ -248,7 +235,7 @@ mod tests {
             HeaderValue::from_static(origin),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         assert_eq!(context.origin, Some(origin.to_string()));
     }
@@ -256,22 +243,8 @@ mod tests {
     #[test]
     fn test_empty_device_id() {
         let header_map = HeaderMap::new();
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
-        let device_id = context.device_id;
-
-        assert!(device_id.ciphertext.is_some());
-        assert!(device_id.cleartext.is_some());
-    }
-
-    #[test]
-    fn test_empty_device_id_with_storage() {
-        let header_map = HeaderMap::new();
-        let context = Context::new(&header_map, "123", Platform::Ios, || Some("foobar".to_string()));
-        let device_id = context.device_id;
-        let cleartext = Cleartext::from("foobar");
-
-        assert!(device_id.ciphertext.is_some());
-        assert_eq!(device_id.cleartext, Some(cleartext));
+        let context = Context::new(&header_map, "123", Platform::Ios);
+        assert!(context.device_id.is_none());
     }
 
     #[test]
@@ -285,11 +258,11 @@ mod tests {
             HeaderValue::from_static(cipher),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
-        let device_id = context.device_id;
+        let context = Context::new(&header_map, "123", Platform::Ios);
+        let device_id = context.device_id.unwrap();
 
-        assert_eq!(device_id.ciphertext, Some(Ciphertext::from(cipher)));
-        assert_eq!(device_id.cleartext, Some(Cleartext::from(clear)));
+        assert_eq!(device_id.ciphertext, Ciphertext::from(cipher));
+        assert_eq!(device_id.cleartext, Cleartext::from(clear));
     }
 
     #[test]
@@ -302,10 +275,8 @@ mod tests {
             HeaderValue::from_static(cipher),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
-        let device_id = context.device_id;
+        let result = Context::new(&header_map, "123", Platform::Ios);
 
-        assert_eq!(device_id.ciphertext, Some(Ciphertext::from(cipher)));
-        assert!(device_id.cleartext.is_none());
+        assert_eq!(Err(GatewayError::BadDeviceId), result);
     }
 }

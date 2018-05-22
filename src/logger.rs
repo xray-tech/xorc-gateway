@@ -169,13 +169,10 @@ impl GelfLogger {
                 msg.set_metadata("api_token", format!("{}", api_token))?;
             };
 
-            if let Some(ref encrypted) = context.device_id.ciphertext {
-                msg.set_metadata("encrypted_device_id", format!("{}", encrypted))?;
-            };
-
-            if let Some(ref cleartext) = context.device_id.cleartext {
-                msg.set_metadata("device_id", format!("{}", cleartext))?;
-            };
+            if let Some(ref device_id) = context.device_id {
+                msg.set_metadata("encrypted_device_id", format!("{}", device_id.ciphertext))?;
+                msg.set_metadata("device_id", format!("{}", device_id.cleartext))?;
+            }
 
             if let Some(ref signature) = context.signature {
                 msg.set_metadata("signature", format!("{}", signature))?;

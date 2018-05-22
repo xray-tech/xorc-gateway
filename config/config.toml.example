@@ -5,6 +5,10 @@ process_name_prefix = "sdk-gateway-worker-"
 default_token = "T0BdxB0O/+eRZhN6REPmbYpTqjxCTtUgirbW7ABJ8renKaxoGbHFsOX2iLFhuWaJbZHzmTnvKv15fv/87ceIQQ=="
 allow_empty_signature = false
 
+[kafka]
+brokers = ["kafka.service.consul:9092"]
+topic = "staging.sdk.events"
+
 [cors]
 allowed_methods = "POST,OPTIONS"
 allowed_headers = "Content-Type, Content-Length, X-Real-IP, D360-Signature, D360-Device-Id, D360-Api-Token"

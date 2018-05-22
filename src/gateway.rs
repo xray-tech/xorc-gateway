@@ -12,15 +12,12 @@ use hyper::{
 };
 
 use std::{
-    sync::Arc,
     net::ToSocketAddrs,
 };
 
 use futures::{
     future::{
         self,
-        lazy,
-        poll_fn,
         ok,
         err,
         Either
@@ -38,24 +35,25 @@ use events::{
         EventStatus,
         Platform,
     },
+    output,
 };
 use tokio_threadpool::{
     self,
-    blocking,
-    BlockingError,
 };
 
 use serde_json;
 use error::{self, GatewayError};
-use context::Context;
+use context::{Context, DeviceId};
 use tokio::runtime::{Builder as RuntimeBuilder};
+use encryption::{Cleartext, Ciphertext};
 
 use ::{
     GLOG,
     APP_REGISTRY,
     CORS,
     CONFIG,
-    ENTITY_STORAGE
+    ENTITY_STORAGE,
+    KAFKA
 };
 
 pub struct Gateway {}
@@ -151,93 +149,113 @@ impl Gateway {
         ok(builder.body("".into()).unwrap())
     }
 
-    /// Get all possible user information
-    fn get_context(
-        event: Arc<SDKEventBatch>,
-        header_map: Arc<HeaderMap>,
-    ) -> impl Future<Item=Context, Error=BlockingError> + 'static + Send
-    {
-        lazy(move || poll_fn(move || blocking(|| {
-            match *ENTITY_STORAGE {
-                Some(ref es) => {
-                    let fun = || es.get_id_for_ifa(&event.environment.app_id, &event.device);
-                    Context::new(
-                        &*header_map,
-                        &event.environment.app_id,
-                        event.device.platform(),
-                        fun
-                    )
-                },
-                None => {
-                    warn!("Aerospike is disabled, should only happen in a development environment.");
-
-                    let fun = || None;
-                    Context::new(
-                        &*header_map,
-                        &event.environment.app_id,
-                        event.device.platform(),
-                        fun
-                    )
-                }
-            }
-        })))
-    }
-
     /// SDK event handling is here
     fn handle_event(
         body: Vec<u8>,
-        event: Arc<SDKEventBatch>,
-        headers: Arc<HeaderMap>,
+        event: SDKEventBatch,
+        headers: HeaderMap,
     ) -> impl Future<Item=(String, Context), Error=(GatewayError, Option<Context>)> + 'static + Send
     {
-        Self::get_context(event.clone(), headers.clone())
-            .map_err(|_| {
-                (GatewayError::ServiceUnavailable("Too many pending requests to Aerospike"), None)
-            })
-            .and_then(move |context| {
-                if context.device_id.cleartext.is_none() {
-                    return err((GatewayError::BadDeviceId, Some(context)))
-                }
+        let context = Context::new(
+            &headers,
+            &event.environment.app_id,
+            event.device.platform(),
+        );
 
-                if let Some(ref cors) = *CORS {
-                    if event.device.platform() == Platform::Web {
-                        if !cors.valid_origin(&context.app_id, context.origin.as_ref().map(|x| &**x)) {
-                            return err((GatewayError::UnknownOrigin, Some(context)))
-                        }
+        if let Some(ref cors) = *CORS {
+            if event.device.platform() == Platform::Web {
+                let app_id = &event.environment.app_id;
+                let origin = headers.get(header::ORIGIN).and_then(|h| h.to_str().ok());
+
+                if !cors.valid_origin(app_id, origin) {
+                    return Either::B(err((GatewayError::UnknownOrigin, Some(context))))
+                }
+            }
+        };
+
+        let validation = APP_REGISTRY.validate(
+            &event.environment.app_id,
+            &context,
+            &event.device.platform(),
+            &body,
+        );
+
+        match validation {
+            Ok(()) => {
+                let mut results: Vec<EventResult> = Vec::new();
+
+                for e in event.events.iter() {
+                    if e.is_register() {
+                        let ciphertext: Ciphertext = match context.device_id {
+                            Some(ref device_id) => {
+                                device_id.ciphertext.clone()
+                            },
+                            _ => {
+                                match &*ENTITY_STORAGE {
+                                    Some(ref storage) => {
+                                        storage.get_id_for_ifa(&event.environment.app_id, &event.device)
+                                            .map(|device_id| {
+                                                let cleartext = Cleartext::from(device_id);
+                                                Ciphertext::encrypt(&cleartext)
+                                            })
+                                            .unwrap_or_else(|| {
+                                                DeviceId::generate().ciphertext
+                                            })
+                                    },
+                                    _ => {
+                                        DeviceId::generate().ciphertext
+                                    }
+                                }
+                            }
+                        };
+
+                        results.push(EventResult::register(
+                            e.id.clone(),
+                            EventStatus::Success,
+                            context.api_token.clone(),
+                            ciphertext,
+                        ));
+                    } else {
+                        results.push(EventResult::new(
+                            e.id.clone(),
+                            EventStatus::Success,
+                        ));
                     }
                 }
 
-                let validation = APP_REGISTRY.validate(
-                    &event.environment.app_id,
-                    &context,
-                    &event.device.platform(),
-                    &body,
-                );
+                // TODO: SORT EVENTS
+                let mut proto_event: output::events::SdkEventBatch =
+                    event.into();
 
-                match validation {
-                    Ok(()) => {
-                        let api_token = context.api_token.clone();
-                        let ciphertext = context.device_id.ciphertext.clone();
+                if proto_event.event.len() == 0 {
+                    warn!("Received a request without any events in it!");
 
-                        let results: Vec<EventResult> = event.events.iter().map(|e| {
-                            EventResult::register(
-                                &e.id,
-                                EventStatus::Success,
-                                &api_token,
-                                &ciphertext,
+                    Either::B(err((
+                        GatewayError::InvalidPayload,
+                        Some(context)
+                    )))
+                } else {
+                    let response = KAFKA.publish(proto_event)
+                        .or_else(|_| {
+                            err((
+                                GatewayError::ServiceUnavailable("kafka"),
+                                None
+                            ))
+                        })
+                        .map(move |_| {
+                            (
+                                serde_json::to_string(&SDKResponse::from(results)).unwrap(),
+                                context
                             )
-                        }).collect();
+                        });
 
-                        ok((
-                            serde_json::to_string(&SDKResponse::from(results)).unwrap(),
-                            context
-                        ))
-                    },
-                    Err(e) => {
-                        err((e, Some(context)))
-                    }
+                    Either::A(response)
                 }
-            })
+            },
+            Err(e) => {
+                Either::B(err((e, Some(context))))
+            }
+        }
     }
 
     /// The request level SDK event handling
@@ -246,17 +264,17 @@ impl Gateway {
     ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
     {
         let (head, body) = req.into_parts();
-        let headers = Arc::new(head.headers);
+        let headers = head.headers;
 
         body
             .concat2()
             .or_else(|_| err((GatewayError::InternalServerError("body concat"), None)))
             .and_then(move |body| {
-                if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body).map(|e| Arc::new(e)) {
+                if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
                     Either::A(Self::handle_event(
                         body.to_vec(),
                         event,
-                        headers.clone(),
+                        headers,
                     ))
                 } else {
                     Either::B(err((GatewayError::InvalidPayload, None)))

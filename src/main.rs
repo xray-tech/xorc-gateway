@@ -41,6 +41,8 @@ extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate postgres;
 extern crate chan_signal;
+extern crate blake2;
+extern crate rdkafka;
 
 mod entity_storage;
 mod error;
@@ -52,6 +54,7 @@ mod logger;
 mod cors;
 mod app_registry;
 mod encryption;
+mod bus;
 
 use gateway::Gateway;
 use entity_storage::EntityStorage;
@@ -73,7 +76,11 @@ use std::{
 lazy_static! {
     pub static ref GLOG: logger::GelfLogger =
         logger::GelfLogger::new().unwrap();
-    static ref CONFIG: Config =
+
+    pub static ref ENTITY_STORAGE: Option<EntityStorage> =
+        CONFIG.aerospike.as_ref().map(|ref as_config| EntityStorage::new(as_config));
+
+    pub static ref CONFIG: Config =
         match env::var("CONFIG") {
             Ok(config_file_location) => {
                 Config::parse(&config_file_location)
@@ -83,10 +90,9 @@ lazy_static! {
             }
         };
 
-    static ref APP_REGISTRY: AppRegistry = AppRegistry::new();
-    static ref CORS: Option<Cors> = Cors::new();
-    static ref ENTITY_STORAGE: Option<EntityStorage> =
-        CONFIG.aerospike.as_ref().map(|ref as_config| EntityStorage::new(as_config));
+    pub static ref APP_REGISTRY: AppRegistry = AppRegistry::new();
+    pub static ref CORS: Option<Cors> = Cors::new();
+    pub static ref KAFKA: bus::Kafka = bus::Kafka::new();
 }
 
 fn main() {

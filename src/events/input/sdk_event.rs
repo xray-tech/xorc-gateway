@@ -28,6 +28,16 @@ pub struct SDKEvent
     pub reference_id: Option<String>,
 }
 
+impl SDKEvent {
+    pub fn is_register(&self) -> bool {
+        if let Some(ref name) = self.name {
+            name == "d360_register"
+        } else {
+            false
+        }
+    }
+}
+
 fn default_event_id() -> String {
     "0".to_string()
 }
