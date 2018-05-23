@@ -165,14 +165,25 @@ impl Gateway {
             _ => {
                 match &*ENTITY_STORAGE {
                     Some(ref storage) => {
-                        storage.get_id_for_ifa(&app_id, &device)
+                        let device_id = storage.get_id_for_ifa(&app_id, &device)
                             .map(|device_id| {
                                 let cleartext = Cleartext::from(device_id);
-                                Ciphertext::encrypt(&cleartext)
+                                let ciphertext = Ciphertext::encrypt(&cleartext);
+
+                                DeviceId {
+                                    cleartext,
+                                    ciphertext,
+                                }
                             })
                             .unwrap_or_else(|| {
-                                DeviceId::generate().ciphertext
-                            })
+                                DeviceId::generate()
+                            });
+
+                        if let Err(e) = storage.put_id_for_ifa(app_id, &device_id.cleartext, device) {
+                            warn!("{}", e);
+                        }
+
+                        device_id.ciphertext
                     },
                     _ => {
                         DeviceId::generate().ciphertext
