@@ -11,35 +11,47 @@ use serde_json::{
     Map,
 };
 
+use std::{
+    fmt::Display,
+    str::FromStr,
+};
+
+use serde::de::{self, Deserialize, Deserializer};
+
 #[derive(Deserialize, Debug)]
 pub struct SDKEvent
 {
     #[serde(default = "default_event_id")]
     pub id: String,
+    #[serde(deserialize_with = "from_str")]
+    pub timestamp: u64,
+    pub name: String,
 
     #[serde(default)]
     properties: Map<String, Value>,
 
     pub session_id: Option<String>,
-    pub timestamp: Option<String>,
-    pub name: Option<String>,
     pub external_user_id: Option<String>,
-    pub is_in_control_group: Option<i32>,
     pub reference_id: Option<String>,
 }
 
 impl SDKEvent {
     pub fn is_register(&self) -> bool {
-        if let Some(ref name) = self.name {
-            name == "d360_register"
-        } else {
-            false
-        }
+        &*self.name == "d360_register"
     }
 }
 
 fn default_event_id() -> String {
     "0".to_string()
+}
+
+fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where T: FromStr,
+      T::Err: Display,
+      D: Deserializer<'de>
+{
+    let s = String::deserialize(deserializer)?;
+    T::from_str(&s).map_err(de::Error::custom)
 }
 
 impl Into<output::events::SdkEventData> for SDKEvent {
@@ -48,8 +60,8 @@ impl Into<output::events::SdkEventData> for SDKEvent {
             properties: self.properties(),
             id: Some(self.id),
             session_id: self.session_id,
-            timestamp: self.timestamp,
-            name: self.name,
+            timestamp: Some(format!("{}", self.timestamp)),
+            name: Some(self.name),
             external_user_id: self.external_user_id,
             reference_id: self.reference_id,
             ..Default::default()
@@ -135,20 +147,29 @@ mod tests {
     use serde_json;
 
     #[test]
-    fn test_with_empty_properties() {
+    fn test_required_properties() {
         let json = json!({
+            "timestamp": "1527092525607",
+            "name": "test_event",
             "properties": {}
         });
 
         let event: SDKEvent = serde_json::from_value(json).unwrap();
+
+        assert_eq!(1527092525607, event.timestamp);
+
         let proto: output::events::SdkEventData = event.into();
 
         assert!(proto.properties.is_empty());
+        assert_eq!(Some("test_event".to_string()), proto.name);
+        assert_eq!(Some("1527092525607".to_string()), proto.timestamp)
     }
 
     #[test]
     fn test_with_string_property() {
         let json = json!({
+            "timestamp": "1527092525607",
+            "name": "test_event",
             "properties": {
                 "foo": "bar",
             }
@@ -167,6 +188,8 @@ mod tests {
     #[test]
     fn test_with_number_property() {
         let json = json!({
+            "timestamp": "1527092525607",
+            "name": "test_event",
             "properties": {
                 "foo": 420,
             }
@@ -185,6 +208,8 @@ mod tests {
     #[test]
     fn test_with_bool_property() {
         let json = json!({
+            "timestamp": "1527092525607",
+            "name": "test_event",
             "properties": {
                 "foo": true,
             }
@@ -203,6 +228,8 @@ mod tests {
     #[test]
     fn test_with_object_property() {
         let json = json!({
+            "timestamp": "1527092525607",
+            "name": "test_event",
             "properties": {
                 "foo": {
                     "bar": "lol",

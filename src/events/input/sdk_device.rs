@@ -1,4 +1,7 @@
 use events::output::common;
+use std::net::IpAddr;
+use blake2::{Blake2b, Digest};
+use base64;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Platform {
@@ -45,6 +48,20 @@ pub struct SDKDevice
     pub notification_types: Option<i32>,
     pub orientation: Option<String>,
     pub platform: Option<String>,
+    pub ip_hashed_blake2: Option<String>,
+}
+
+impl SDKDevice {
+    pub fn set_ip_and_country(&mut self, ip: &IpAddr) {
+        let data = format!("{}", ip);
+
+        let mut hasher = Blake2b::new();
+        hasher.input(data.as_bytes());
+
+        let hash = hasher.result();
+        self.ip_hashed_blake2 = Some(base64::encode(hash.as_slice()));
+        // TODO: maxmind here!
+    }
 }
 
 impl SDKDevice
@@ -84,6 +101,7 @@ impl Into<common::Device> for SDKDevice {
             w: self.w.or(Some(-1)),
             ifa_tracking_enabled: Some(self.ifa_tracking_enabled),
             notification_registered: Some(self.notification_registered),
+            ip_hashed_blake2: self.ip_hashed_blake2,
 
             carrier: Some(common::Carrier {
                 name: self.carrier_name,

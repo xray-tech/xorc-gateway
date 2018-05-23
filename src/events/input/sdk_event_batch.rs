@@ -10,7 +10,11 @@ pub struct SDKEventBatch
 }
 
 impl Into<output::events::SdkEventBatch> for SDKEventBatch {
-    fn into(self) -> output::events::SdkEventBatch {
+    fn into(mut self) -> output::events::SdkEventBatch {
+        self.events.sort_unstable_by(|e1, e2| {
+            e1.timestamp.cmp(&e2.timestamp)
+        });
+
         output::events::SdkEventBatch {
             header: output::common::Header {
                 created_at: Utc::now().timestamp_millis(),
@@ -21,6 +25,7 @@ impl Into<output::events::SdkEventBatch> for SDKEventBatch {
             },
             environment: Some(self.environment.into()),
             device: Some(self.device.into()),
+            event: self.events.into_iter().map(|ev| ev.into()).collect(),
             ..Default::default()
         }
     }

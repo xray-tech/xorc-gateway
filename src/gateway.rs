@@ -29,6 +29,7 @@ use futures::{
 
 use events::{
     input::{
+        SDKDevice,
         SDKEventBatch,
         SDKResponse,
         EventResult,
@@ -53,7 +54,8 @@ use ::{
     CORS,
     CONFIG,
     ENTITY_STORAGE,
-    KAFKA
+    KAFKA,
+    RABBITMQ,
 };
 
 pub struct Gateway {}
@@ -149,10 +151,48 @@ impl Gateway {
         ok(builder.body("".into()).unwrap())
     }
 
+    fn create_new_device(
+        context: &Context,
+        app_id: &str,
+        device: &SDKDevice,
+        event_id: &str
+    ) -> EventResult
+    {
+        let ciphertext: Ciphertext = match context.device_id {
+            Some(ref device_id) => {
+                device_id.ciphertext.clone()
+            },
+            _ => {
+                match &*ENTITY_STORAGE {
+                    Some(ref storage) => {
+                        storage.get_id_for_ifa(&app_id, &device)
+                            .map(|device_id| {
+                                let cleartext = Cleartext::from(device_id);
+                                Ciphertext::encrypt(&cleartext)
+                            })
+                            .unwrap_or_else(|| {
+                                DeviceId::generate().ciphertext
+                            })
+                    },
+                    _ => {
+                        DeviceId::generate().ciphertext
+                    }
+                }
+            }
+        };
+
+        EventResult::register(
+            event_id.to_string(),
+            EventStatus::Success,
+            context.api_token.clone(),
+            ciphertext,
+        )
+    }
+
     /// SDK event handling is here
     fn handle_event(
         body: Vec<u8>,
-        event: SDKEventBatch,
+        mut event: SDKEventBatch,
         headers: HeaderMap,
     ) -> impl Future<Item=(String, Context), Error=(GatewayError, Option<Context>)> + 'static + Send
     {
@@ -182,46 +222,23 @@ impl Gateway {
 
         match validation {
             Ok(()) => {
-                let mut results: Vec<EventResult> = Vec::new();
+                if let Some(ref ip) = context.ip { event.device.set_ip_and_country(ip) }
 
-                for e in event.events.iter() {
+                let results: Vec<EventResult> = event.events.iter().map(|e| {
                     if e.is_register() {
-                        let ciphertext: Ciphertext = match context.device_id {
-                            Some(ref device_id) => {
-                                device_id.ciphertext.clone()
-                            },
-                            _ => {
-                                match &*ENTITY_STORAGE {
-                                    Some(ref storage) => {
-                                        storage.get_id_for_ifa(&event.environment.app_id, &event.device)
-                                            .map(|device_id| {
-                                                let cleartext = Cleartext::from(device_id);
-                                                Ciphertext::encrypt(&cleartext)
-                                            })
-                                            .unwrap_or_else(|| {
-                                                DeviceId::generate().ciphertext
-                                            })
-                                    },
-                                    _ => {
-                                        DeviceId::generate().ciphertext
-                                    }
-                                }
-                            }
-                        };
-
-                        results.push(EventResult::register(
-                            e.id.clone(),
-                            EventStatus::Success,
-                            context.api_token.clone(),
-                            ciphertext,
-                        ));
+                        Self::create_new_device(
+                            &context,
+                            &event.environment.app_id,
+                            &event.device,
+                            &e.id,
+                        )
                     } else {
-                        results.push(EventResult::new(
+                        EventResult::new(
                             e.id.clone(),
                             EventStatus::Success,
-                        ));
+                        )
                     }
-                }
+                }).collect();
 
                 // TODO: SORT EVENTS
                 let mut proto_event: output::events::SdkEventBatch =
@@ -235,13 +252,11 @@ impl Gateway {
                         Some(context)
                     )))
                 } else {
-                    let response = KAFKA.publish(proto_event)
-                        .or_else(|_| {
-                            err((
-                                GatewayError::ServiceUnavailable("kafka"),
-                                None
-                            ))
-                        })
+                    let kafka = KAFKA.publish(&proto_event, &context);
+                    let rabbitmq = RABBITMQ.publish(&proto_event, &context);
+
+                    let response = kafka.join(rabbitmq)
+                        .or_else(|e| { err((e, None)) })
                         .map(move |_| {
                             (
                                 serde_json::to_string(&SDKResponse::from(results)).unwrap(),

@@ -376,7 +376,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
@@ -420,7 +420,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
         let validation = app_registry.validate(
             "1",
@@ -462,7 +462,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
         let validation = app_registry.validate(
             "1",
@@ -489,7 +489,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
         let app_registry = AppRegistry::new();
 
@@ -515,7 +515,7 @@ mod tests {
             ),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
 
         assert_eq!(
@@ -544,7 +544,7 @@ mod tests {
             HeaderValue::from_static("pylly"),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
 
         assert_eq!(
@@ -567,7 +567,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
@@ -595,7 +595,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
@@ -624,7 +624,7 @@ mod tests {
             HeaderValue::from_static(TOKEN),
         );
 
-        let context = Context::new(&header_map, "123", Platform::Ios, || None);
+        let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(

@@ -5,12 +5,13 @@ use toml;
 #[derive(Deserialize, Debug)]
 pub struct Config {
     pub kafka: KafkaConfig,
+    pub rabbitmq: RabbitMqConfig,
     pub gateway: GatewayConfig,
     pub cors: Option<CorsConfig>,
     pub origins: Vec<OriginConfig>,
+    pub test_apps: Vec<TestAppConfig>,
     pub postgres: Option<PostgresConfig>,
     pub aerospike: Option<AerospikeConfig>,
-    pub test_apps: Vec<TestAppConfig>,
 }
 
 impl Config {
@@ -80,4 +81,14 @@ pub struct AerospikeConfig {
 pub struct KafkaConfig {
     pub topic: String,
     pub brokers: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RabbitMqConfig {
+    pub exchange: String,
+    pub vhost: String,
+    pub host: String,
+    pub port: u16,
+    pub login: String,
+    pub password: String,
 }

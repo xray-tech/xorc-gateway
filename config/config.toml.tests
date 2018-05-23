@@ -9,6 +9,18 @@ allow_empty_signature = false
 allowed_methods = "HERP,DERP"
 allowed_headers = "Content-Type, Content-Length"
 
+[kafka]
+brokers = "kafka.service.consul:9092"
+topic = "development.rule-engine.sdk-events"
+
+[rabbitmq]
+exchange = "rule-engine-direct"
+vhost = "/"
+host = "localhost"
+port = 5672
+login = "guest"
+password = "guest"
+
 [[origins]]
 app_id = 1
 allowed = ["https://www.google.fi"]

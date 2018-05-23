@@ -116,7 +116,6 @@ mod tests {
     use hyper::HeaderMap;
     use http::header::HeaderValue;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-    use error::GatewayError;
 
     #[test]
     fn test_empty_ip_address() {
@@ -275,8 +274,8 @@ mod tests {
             HeaderValue::from_static(cipher),
         );
 
-        let result = Context::new(&header_map, "123", Platform::Ios);
+        let context = Context::new(&header_map, "123", Platform::Ios);
 
-        assert_eq!(Err(GatewayError::BadDeviceId), result);
+        assert!(context.device_id.is_none());
     }
 }

@@ -72,10 +72,10 @@ mod tests {
         let token = Some(String::from("token"));
         let cipher = Ciphertext::from("encrypted");
         let event_result = EventResult::register(
-            "123",
+            "123".to_string(),
             EventStatus::Success,
-            &token,
-            &cipher,
+            token.clone(),
+            cipher.clone(),
         );
 
         let sdk_response = SDKResponse::from(vec!(event_result));

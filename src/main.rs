@@ -43,6 +43,7 @@ extern crate postgres;
 extern crate chan_signal;
 extern crate blake2;
 extern crate rdkafka;
+extern crate lapin_futures;
 
 mod entity_storage;
 mod error;
@@ -93,6 +94,7 @@ lazy_static! {
     pub static ref APP_REGISTRY: AppRegistry = AppRegistry::new();
     pub static ref CORS: Option<Cors> = Cors::new();
     pub static ref KAFKA: bus::Kafka = bus::Kafka::new();
+    pub static ref RABBITMQ: bus::RabbitMq = bus::RabbitMq::new();
 }
 
 fn main() {
