@@ -103,7 +103,7 @@ impl Gateway {
         let mut threadpool_builder = tokio_threadpool::Builder::new();
         threadpool_builder
             .name_prefix(CONFIG.gateway.process_name_prefix.clone())
-            .pool_size(4);
+            .pool_size(CONFIG.gateway.threads);
 
         let mut runtime = RuntimeBuilder::new()
             .threadpool_builder(threadpool_builder)
@@ -115,9 +115,14 @@ impl Gateway {
                     Self::service(req)
                 })
             })
-            .map_err(|e| println!("server error: {}", e));
+            .map_err(|e| println!("Critical server error, exiting: {}", e));
 
-        println!("Listening on http://{}", &addr);
+        println!(
+            "Running on {} threads. Listening on http://{}",
+            CONFIG.gateway.threads,
+            &addr
+        );
+
         runtime.spawn(server.select2(rx).then(move |_| Ok(())));
         runtime.shutdown_on_idle().wait().unwrap();
     }
