@@ -27,7 +27,6 @@ extern crate serde;
 extern crate chrono;
 extern crate prost;
 extern crate bytes;
-extern crate argparse;
 extern crate toml;
 extern crate futures;
 extern crate base64;
@@ -78,9 +77,6 @@ lazy_static! {
     pub static ref GLOG: logger::GelfLogger =
         logger::GelfLogger::new().unwrap();
 
-    pub static ref ENTITY_STORAGE: Option<EntityStorage> =
-        CONFIG.aerospike.as_ref().map(|ref as_config| EntityStorage::new(as_config));
-
     pub static ref CONFIG: Config =
         match env::var("CONFIG") {
             Ok(config_file_location) => {
@@ -91,6 +87,7 @@ lazy_static! {
             }
         };
 
+    pub static ref ENTITY_STORAGE: EntityStorage = EntityStorage::new();
     pub static ref APP_REGISTRY: AppRegistry = AppRegistry::new();
     pub static ref CORS: Option<Cors> = Cors::new();
     pub static ref KAFKA: bus::Kafka = bus::Kafka::new();

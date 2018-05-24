@@ -11,7 +11,7 @@ pub struct Config {
     pub origins: Vec<OriginConfig>,
     pub test_apps: Vec<TestAppConfig>,
     pub postgres: Option<PostgresConfig>,
-    pub aerospike: Option<AerospikeConfig>,
+    pub aerospike: AerospikeConfig,
 }
 
 impl Config {

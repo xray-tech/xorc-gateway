@@ -139,16 +139,15 @@ impl AppRegistry {
     ///   data.
     pub fn validate(
         &self,
-        app_id: &str,
+        event: &input::SDKEventBatch,
         context: &Context,
-        platform: &input::Platform,
         raw_data: &[u8],
     ) -> Result<(), GatewayError>
     {
         let apps = self.apps.get();
 
         let app = apps
-            .get(app_id)
+            .get(&event.environment.app_id)
             .ok_or(GatewayError::AppDoesNotExist)?;
 
         let valid_token = app
@@ -163,6 +162,11 @@ impl AppRegistry {
 
         if sent_token != valid_token { return Err(GatewayError::InvalidToken) }
 
+        if event.events.len() == 0 {
+            warn!("Received a request without any events in it!");
+            return Err(GatewayError::InvalidPayload)
+        }
+
         if self.allow_empty_signature {
             warn!("Skipped signature checks because of configuration. Use only on development!");
             return Ok(())
@@ -173,7 +177,7 @@ impl AppRegistry {
             .as_ref()
             .ok_or(GatewayError::MissingSignature)?;
 
-        let platform_key = match platform {
+        let platform_key = match event.device.platform() {
             input::Platform::Ios     => app.ios_secret.as_ref(),
             input::Platform::Android => app.android_secret.as_ref(),
             input::Platform::Web     => app.web_secret.as_ref(),
@@ -295,7 +299,12 @@ mod tests {
     use hyper::HeaderMap;
     use http::header::HeaderValue;
     use context::Context;
-    use events::input::Platform;
+    use serde_json;
+
+    use events::input::{
+        Platform,
+        SDKEventBatch,
+    };
 
     const TOKEN: &'static str =
         "46732a28cd445366c6c8dcbd57500af4e69597c8ebe224634d6ccab812275c9c";
@@ -305,6 +314,26 @@ mod tests {
         "d685e53ae50c945e5ae4f36170d7213360a25ed91b91a647574aa384d2b6f901";
     const WEB_SECRET: &'static str =
         "4c553960fdc2a82f90b84f6ef188e836818fcee2c43a6c32bd6c91f41772657f";
+
+    fn create_test_event(app_id: &str, platform: &str) -> SDKEventBatch {
+        let json = json!({
+            "environment": {
+                "app_id": app_id,
+            },
+            "device": {
+                "platform": platform
+            },
+            "events": [
+                {
+                    "timestamp": "1527092525607",
+                    "name": "test_event",
+                    "properties": {}
+                }
+            ]
+        });
+
+        serde_json::from_value(json).unwrap()
+    }
 
     #[test]
     fn test_app_creation_empty_secrets() {
@@ -346,6 +375,39 @@ mod tests {
         assert!(app.web_secret.is_some());
     }
 
+    #[test]
+    fn test_validate_ios_no_events() {
+        let mut header_map = HeaderMap::new();
+
+        header_map.insert(
+            "D360-Signature",
+            HeaderValue::from_static(
+                "8iq7J8PjWZvkfzPDa0HbfwnlbNWTK6giMO2Z1vsUhToMY62rSJtdIHkFaMY+UDIWRjCbf+c5le3AAHVUlDJDRg=="
+            ),
+        );
+        header_map.insert(
+            "D360-Api-Token",
+            HeaderValue::from_static(TOKEN),
+        );
+
+        let context = Context::new(&header_map, "123", Platform::Ios);
+        let app_registry = AppRegistry::new();
+
+        let mut event = create_test_event("1", "ios");
+        event.events.clear();
+
+        let validation = app_registry.validate(
+            &event,
+            &context,
+            "kulli".as_bytes()
+        );
+
+        assert_eq!(
+            Err(GatewayError::InvalidPayload),
+            validation
+        );
+    }
+
     /// Testing the validation of iOS signature against the sent data. The
     /// signature is generated from the `test-sdk.py` test script:
     ///
@@ -380,9 +442,8 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            "1",
+            &create_test_event("1", "ios"),
             &context,
-            &Platform::Ios,
             "kulli".as_bytes()
         );
 
@@ -422,10 +483,10 @@ mod tests {
 
         let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
+
         let validation = app_registry.validate(
-            "1",
+            &create_test_event("1", "android"),
             &context,
-            &Platform::Android,
             "kulli".as_bytes()
         );
 
@@ -464,10 +525,10 @@ mod tests {
 
         let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
+
         let validation = app_registry.validate(
-            "1",
+            &create_test_event("1", "web"),
             &context,
-            &Platform::Web,
             "kulli".as_bytes()
         );
 
@@ -496,9 +557,8 @@ mod tests {
         assert_eq!(
             Err(GatewayError::AppDoesNotExist),
             app_registry.validate(
-                "2",
+                &create_test_event("2", "web"),
                 &context,
-                &Platform::Web,
                 "kulli".as_bytes()
             )
         );
@@ -521,9 +581,8 @@ mod tests {
         assert_eq!(
             Err(GatewayError::MissingToken),
             app_registry.validate(
-                "1",
+                &create_test_event("1", "web"),
                 &context,
-                &Platform::Web,
                 "kulli".as_bytes()
             )
         );
@@ -550,9 +609,8 @@ mod tests {
         assert_eq!(
             Err(GatewayError::InvalidToken),
             app_registry.validate(
-                "1",
+                &create_test_event("1", "web"),
                 &context,
-                &Platform::Web,
                 "kulli".as_bytes()
             )
         );
@@ -571,9 +629,8 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            "1",
+            &create_test_event("1", "web"),
             &context,
-            &Platform::Web,
             "kulli".as_bytes()
         );
 
@@ -599,9 +656,8 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            "1",
+            &create_test_event("1", "pylly"),
             &context,
-            &Platform::Unknown,
             "kulli".as_bytes()
         );
 
@@ -628,9 +684,8 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            "1",
+            &create_test_event("1", "android"),
             &context,
-            &Platform::Android,
             "kulli".as_bytes()
         );
 

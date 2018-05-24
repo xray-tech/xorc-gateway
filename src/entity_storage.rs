@@ -1,5 +1,3 @@
-use config::AerospikeConfig;
-use events::input::SDKDevice;
 use encryption::Cleartext;
 
 use std::{
@@ -19,22 +17,24 @@ use aerospike::{
     ClientPolicy,
 };
 
+use ::CONFIG;
+
 pub struct EntityStorage {
     namespace: String,
     client: Client
 }
 
 impl EntityStorage {
-    pub fn new(config: &AerospikeConfig) -> EntityStorage {
+    pub fn new() -> EntityStorage {
         let client_policy = ClientPolicy {
             thread_pool_size: 16,
             ..Default::default()
         };
 
-        let client = Client::new(&client_policy, &config.nodes).unwrap();
+        let client = Client::new(&client_policy, &CONFIG.aerospike.nodes).unwrap();
 
         EntityStorage {
-            namespace: config.namespace.clone(),
+            namespace: CONFIG.aerospike.namespace.clone(),
             client: client
         }
     }
@@ -42,12 +42,13 @@ impl EntityStorage {
     pub fn get_id_for_ifa<'a>(
         &self,
         app_id: &str,
-        device: &'a SDKDevice
+        ifa: &Option<String>,
+        ifa_tracking_enabled: bool,
     ) -> Option<String>
     {
-        match device.ifa {
+        match ifa {
             Some(ref ifa) if
-                device.ifa_tracking_enabled == true &&
+                ifa_tracking_enabled == true &&
                 ifa != "00000000-0000-0000-0000-000000000000" =>
             {
                 let key = as_key!(
@@ -84,12 +85,13 @@ impl EntityStorage {
         &self,
         app_id: &str,
         device_id: &Cleartext,
-        device: &'a SDKDevice
+        ifa: &Option<String>,
+        ifa_tracking_enabled: bool,
     ) -> Result<(), io::Error>
     {
-        match device.ifa {
+        match ifa {
             Some(ref ifa) if
-                device.ifa_tracking_enabled == true &&
+                ifa_tracking_enabled == true &&
                 ifa != "00000000-0000-0000-0000-000000000000" =>
             {
                 let key = as_key!(

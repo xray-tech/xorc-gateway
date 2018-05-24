@@ -5,13 +5,13 @@ process_name_prefix = "sdk-gateway-worker-"
 default_token = "T0BdxB0O/+eRZhN6REPmbYpTqjxCTtUgirbW7ABJ8renKaxoGbHFsOX2iLFhuWaJbZHzmTnvKv15fv/87ceIQQ=="
 allow_empty_signature = false
 
+[kafka]
+brokers = "kafka:9092"
+topic = "test.rule-engine.sdk-events"
+
 [cors]
 allowed_methods = "HERP,DERP"
 allowed_headers = "Content-Type, Content-Length"
-
-[kafka]
-brokers = "kafka.service.consul:9092"
-topic = "development.rule-engine.sdk-events"
 
 [rabbitmq]
 exchange = "rule-engine-direct"
@@ -20,6 +20,10 @@ host = "localhost"
 port = 5672
 login = "guest"
 password = "guest"
+
+[aerospike]
+nodes = "aerospike:3000"
+namespace = "test"
 
 [[origins]]
 app_id = 1

@@ -1,6 +1,6 @@
 use log::LevelFilter;
 use gelf::{Error, Logger, Message, UdpBackend, Level};
-use std::env;
+use std::{env};
 use env_logger;
 use context::Context;
 use app_registry::Application;

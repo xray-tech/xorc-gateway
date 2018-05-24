@@ -20,6 +20,8 @@ use futures::{
         self,
         ok,
         err,
+        lazy,
+        poll_fn,
         Either
     },
     Future,
@@ -29,7 +31,6 @@ use futures::{
 
 use events::{
     input::{
-        SDKDevice,
         SDKEventBatch,
         SDKResponse,
         EventResult,
@@ -40,6 +41,7 @@ use events::{
 };
 use tokio_threadpool::{
     self,
+    blocking,
 };
 
 use serde_json;
@@ -60,10 +62,14 @@ use ::{
 
 pub struct Gateway {}
 
+type ErrorWithContext = (GatewayError, Option<Context>);
+
 impl Gateway {
     /// ROUTES
     ///
-    /// Define all the endpoints here.
+    /// - OPTIONS to /     :: for CORS/web-push
+    /// - POST to /        :: SDK Events, sent to kafka/rmq
+    /// - GET to /watchdog :: Prometheus metrics
     fn service(
         req: Request<Body>
     ) -> Box<Future<Item=Response<Body>, Error=GatewayError> + Send + 'static>
@@ -152,52 +158,76 @@ impl Gateway {
     }
 
     fn create_new_device(
-        context: &Context,
-        app_id: &str,
-        device: &SDKDevice,
-        event_id: &str
-    ) -> EventResult
+        context: Context,
+        event: SDKEventBatch,
+        event_id: String,
+    ) -> impl Future<Item=(Vec<EventResult>, Context, SDKEventBatch), Error=GatewayError>
     {
-        let ciphertext: Ciphertext = match context.device_id {
+        let ciphertext = match context.device_id {
             Some(ref device_id) => {
-                device_id.ciphertext.clone()
+                let ciphertext = device_id.ciphertext.clone();
+
+                Either::A(ok(ciphertext))
             },
             _ => {
-                match &*ENTITY_STORAGE {
-                    Some(ref storage) => {
-                        let device_id = storage.get_id_for_ifa(&app_id, &device)
-                            .map(|device_id| {
-                                let cleartext = Cleartext::from(device_id);
-                                let ciphertext = Ciphertext::encrypt(&cleartext);
+                let app_id = context.app_id.clone();
+                let ifa = event.device.ifa.clone();
+                let tracking_enabled = event.device.ifa_tracking_enabled;
 
-                                DeviceId {
-                                    cleartext,
-                                    ciphertext,
-                                }
-                            })
-                            .unwrap_or_else(|| {
-                                DeviceId::generate()
-                            });
+                let get_id = lazy(move || poll_fn(move || blocking(|| {
+                    let device_id = ENTITY_STORAGE.get_id_for_ifa(&app_id, &ifa, tracking_enabled)
+                        .map(move |device_id| {
+                            let cleartext = Cleartext::from(device_id);
+                            let ciphertext = Ciphertext::encrypt(&cleartext);
 
-                        if let Err(e) = storage.put_id_for_ifa(app_id, &device_id.cleartext, device) {
-                            warn!("{}", e);
-                        }
+                            DeviceId { cleartext, ciphertext }
+                        }).unwrap_or_else(|| {
+                            DeviceId::generate()
+                        });
 
-                        device_id.ciphertext
-                    },
-                    _ => {
-                        DeviceId::generate().ciphertext
-                    }
-                }
+                    let _ = ENTITY_STORAGE.put_id_for_ifa(
+                        &app_id,
+                        &device_id.cleartext,
+                        &ifa,
+                        tracking_enabled
+                    );
+
+                    device_id.ciphertext
+                })));
+
+                Either::B(get_id)
             }
         };
 
-        EventResult::register(
-            event_id.to_string(),
-            EventStatus::Success,
-            context.api_token.clone(),
-            ciphertext,
-        )
+        ciphertext.map(|ciphertext: Ciphertext| {
+            let results = vec![EventResult::register(
+                event_id,
+                EventStatus::Success,
+                context.api_token.clone(),
+                ciphertext,
+            )];
+
+            (results, context, event)
+        }).map_err(|_| GatewayError::ServiceUnavailable("Aerospike is acting slow today"))
+    }
+
+    fn generate_event_results(
+        context: Context,
+        event: SDKEventBatch,
+    ) -> impl Future<Item=(Vec<EventResult>, Context, SDKEventBatch), Error=GatewayError>
+    {
+        if let Some(event_id) = event.events.iter().find(|ref e| e.is_register()).map(|e| e.id.clone()) {
+            Either::A(Self::create_new_device(context, event, event_id))
+        } else {
+            let results = event.events.iter().map(|e| {
+                EventResult::new(
+                    e.id.clone(),
+                    EventStatus::Success,
+                )
+            }).collect();
+
+            Either::B(ok((results, context, event)))
+        }
     }
 
     /// SDK event handling is here
@@ -205,7 +235,7 @@ impl Gateway {
         body: Vec<u8>,
         mut event: SDKEventBatch,
         headers: HeaderMap,
-    ) -> impl Future<Item=(String, Context), Error=(GatewayError, Option<Context>)> + 'static + Send
+    ) -> impl Future<Item=(String, Context), Error=ErrorWithContext> + 'static + Send
     {
         let context = Context::new(
             &headers,
@@ -224,59 +254,30 @@ impl Gateway {
             }
         };
 
-        let validation = APP_REGISTRY.validate(
-            &event.environment.app_id,
-            &context,
-            &event.device.platform(),
-            &body,
-        );
-
-        match validation {
+        match APP_REGISTRY.validate(&event, &context, &body) {
             Ok(()) => {
                 if let Some(ref ip) = context.ip { event.device.set_ip_and_country(ip) }
 
-                let results: Vec<EventResult> = event.events.iter().map(|e| {
-                    if e.is_register() {
-                        Self::create_new_device(
-                            &context,
-                            &event.environment.app_id,
-                            &event.device,
-                            &e.id,
-                        )
-                    } else {
-                        EventResult::new(
-                            e.id.clone(),
-                            EventStatus::Success,
-                        )
-                    }
-                }).collect();
+                let response = Self::generate_event_results(context, event)
+                    .map_err(|e| (e, None))
+                    .and_then(move |(results, context, event)| {
+                        let proto_event: output::events::SdkEventBatch =
+                            event.into();
 
-                // TODO: SORT EVENTS
-                let mut proto_event: output::events::SdkEventBatch =
-                    event.into();
+                        let kafka = KAFKA.publish(&proto_event, &context);
+                        let rabbitmq = RABBITMQ.publish(&proto_event, &context);
 
-                if proto_event.event.len() == 0 {
-                    warn!("Received a request without any events in it!");
+                        kafka.join(rabbitmq)
+                            .or_else(|e| { err((e, None)) })
+                            .map(move |_| {
+                                (
+                                    serde_json::to_string(&SDKResponse::from(results)).unwrap(),
+                                    context
+                                )
+                            })
+                    });
 
-                    Either::B(err((
-                        GatewayError::InvalidPayload,
-                        Some(context)
-                    )))
-                } else {
-                    let kafka = KAFKA.publish(&proto_event, &context);
-                    let rabbitmq = RABBITMQ.publish(&proto_event, &context);
-
-                    let response = kafka.join(rabbitmq)
-                        .or_else(|e| { err((e, None)) })
-                        .map(move |_| {
-                            (
-                                serde_json::to_string(&SDKResponse::from(results)).unwrap(),
-                                context
-                            )
-                        });
-
-                    Either::A(response)
-                }
+                Either::A(response)
             },
             Err(e) => {
                 Either::B(err((e, Some(context))))
@@ -297,11 +298,14 @@ impl Gateway {
             .or_else(|_| err((GatewayError::InternalServerError("body concat"), None)))
             .and_then(move |body| {
                 if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
-                    Either::A(Self::handle_event(
-                        body.to_vec(),
-                        event,
-                        headers,
-                    ))
+                    let event_handling =
+                        Self::handle_event(
+                            body.to_vec(),
+                            event,
+                            headers,
+                        );
+
+                    Either::A(event_handling)
                 } else {
                     Either::B(err((GatewayError::InvalidPayload, None)))
                 }
