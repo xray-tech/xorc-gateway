@@ -53,7 +53,8 @@ impl Kafka {
             .device_id
             .as_ref()
             .map(|ref device_id| {
-                device_id.cleartext.as_ref().as_bytes().to_vec()
+                let key = format!("{}|{}", context.app_id, device_id.cleartext);
+                key.as_bytes().to_vec()
             })
     }
 }
