@@ -32,16 +32,22 @@ pub struct Ciphertext {
 }
 
 impl Ciphertext {
+    /// Encrypt a device ID with AES 256 GCM encryption.
     pub fn encrypt(cleartext: &Cleartext) -> Ciphertext {
+        // Always different and random
         let mut nonce = [0u8; 12];
         thread_rng().fill_bytes(&mut nonce);
 
+        // 36 characters for the data, 16 for suffix
         let mut ciphertext = [0u8; 52];
 
+        // Cleartext id in the beginning
         for (i, c) in cleartext.as_ref().as_bytes().iter().enumerate() {
             ciphertext[i] = *c;
         }
 
+        // Seal with the nonce, setting 16 characters as suffix, encrypting with
+        // `SECRET`
         aead::seal_in_place(
             &SEALING_KEY,
             &nonce,
@@ -50,6 +56,7 @@ impl Ciphertext {
             16,
         ).unwrap();
 
+        // First 12 characters for nonce, the last 52 for the ciphertext
         let mut payload = [0u8; 64];
 
         for (i, c) in nonce.iter().enumerate() {
@@ -111,13 +118,16 @@ pub struct Cleartext {
 }
 
 impl Cleartext {
+    /// Decrypt a device ID with AES 256 GCM encryption.
     pub fn decrypt(
         ciphertext: &Ciphertext
     ) -> Result<Cleartext, error::Unspecified>
     {
+        // 64 characters of encrypted data, first 12 for the nonce, last for the device id
         let mut decoded = base64::decode(ciphertext.as_ref()).map_err(|_| error::Unspecified)?;
         let (nonce, mut cipher) = decoded.split_at_mut(12);
 
+        // Open with the nonce we generated with `encrypt` and the secret key
         let decrypted_content = aead::open_in_place(
             &OPENING_KEY,
             &nonce,
