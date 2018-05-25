@@ -15,6 +15,8 @@ extern crate indoc;
 extern crate chan;
 #[macro_use]
 extern crate aerospike;
+#[macro_use]
+extern crate prometheus;
 
 extern crate hex;
 extern crate crossbeam;
@@ -35,7 +37,6 @@ extern crate rand;
 extern crate http;
 extern crate tokio;
 extern crate tokio_threadpool;
-extern crate prometheus;
 extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate postgres;
@@ -55,6 +56,7 @@ mod cors;
 mod app_registry;
 mod encryption;
 mod bus;
+mod metrics;
 
 use gateway::Gateway;
 use entity_storage::EntityStorage;

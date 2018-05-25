@@ -50,6 +50,7 @@ use context::{Context, DeviceId};
 use tokio::runtime::{Builder as RuntimeBuilder};
 use encryption::{Cleartext, Ciphertext};
 use prost::Message;
+use metrics::*;
 
 use ::{
     GLOG,
@@ -82,13 +83,23 @@ impl Gateway {
             },
             // SDK events main path
             (&Method::POST, "/") => {
-                Box::new(Self::handle_sdk(req))
+                let timer = RESPONSE_TIMES_HISTOGRAM.start_timer();
+
+                Box::new(Self::handle_sdk(req).then(|response| {
+                    timer.observe_duration();
+                    response
+                }))
             },
             // Prometheus metrics
             (&Method::GET, "/watchdog") => {
                 Box::new(Self::handle_metrics())
             },
             _ => {
+                REQUEST_COUNTER.with_label_values(&[
+                    "404",
+                    "not_found",
+                ]).inc();
+
                 let mut res = Response::new(Body::empty());
                 *res.status_mut() = StatusCode::NOT_FOUND;
                 Box::new(future::ok(res))
@@ -348,7 +359,14 @@ impl Gateway {
                     },
                     Err((e, context)) => {
                         let _ = GLOG.log_error(&e, &context);
-                        ok(error::into_response(e, context))
+                        let response = error::into_response(e, context);
+
+                        REQUEST_COUNTER.with_label_values(&[
+                            response.status().as_str(),
+                            "sdk_events",
+                        ]).inc();
+
+                        ok(response)
                     },
                 }
             })
