@@ -67,7 +67,14 @@ test result: ok. XX passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ## Configuration
 
 The system is configuration is handled through a
-[toml](https://github.com/toml-lang/toml) file.
+[toml](https://github.com/toml-lang/toml) file and a few environment variables.
+
+### Environment variables
+
+variable | description                                                   | example
+-------------------------------------------------------------------------|----------------------------------
+CONFIG   | The configuration file location                               | `/etc/xorc-gateway/config.toml`
+SECRET   | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
 
 ### Required options
 
@@ -121,7 +128,7 @@ section    | key           | description                                        
 [postgres] | idle\_timeout | If idle, how many milliseconds to keep a connection open | `90000`
 [postgres] | max\_lifetime | The maximum amount of time to keep a connection open     | `1800000`
 
-If the session doesn't exist, the config must have at least one `[[test_apps]]` included.
+If the section doesn't exist, the config must have at least one `[[test_apps]]` included.
 
 section        | key             | description                                                         | example
 ---------------|-----------------|---------------------------------------------------------------------|-----------------------
