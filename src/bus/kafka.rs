@@ -3,8 +3,6 @@ use rdkafka::{
     producer::FutureProducer,
 };
 
-use prost::Message;
-use events::output::events::SdkEventBatch;
 use error::GatewayError;
 use futures::Future;
 use context::Context;
@@ -31,17 +29,14 @@ impl Kafka {
 
     pub fn publish(
         &self,
-        event: &SdkEventBatch,
+        payload: &Vec<u8>,
         context: &Context,
     ) -> impl Future<Item=(), Error=GatewayError>
     {
-        let mut buf = Vec::new();
-        event.encode(&mut buf).unwrap();
-
         self.producer.send_copy::<Vec<u8>, Vec<u8>>(
             CONFIG.kafka.topic.as_ref(),
             None,
-            Some(&buf),
+            Some(payload),
             Self::routing_key(context).as_ref(),
             None,
             1000,

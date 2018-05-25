@@ -23,9 +23,6 @@ use futures::{
 use tokio;
 use tokio::net::TcpStream;
 use context::{Context, DeviceId};
-use events::output::events::SdkEventBatch;
-use prost::Message;
-
 use error::GatewayError;
 use ::CONFIG;
 
@@ -82,19 +79,16 @@ impl RabbitMq {
 
     pub fn publish(
         &self,
-        event: &SdkEventBatch,
+        payload: &Vec<u8>,
         context: &Context,
     ) -> impl Future<Item=(), Error=GatewayError>
     {
-        let mut buf = vec![];
-        event.encode(&mut buf).unwrap();
-
         let routing_key = Self::routing_key(context.device_id.as_ref());
 
         self.channel.basic_publish(
             CONFIG.rabbitmq.exchange.as_ref(),
             routing_key.as_ref(),
-            &buf,
+            payload,
             &BasicPublishOptions {
                 mandatory: false,
                 immediate: false,

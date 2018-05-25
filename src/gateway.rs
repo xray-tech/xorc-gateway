@@ -49,6 +49,7 @@ use error::{self, GatewayError};
 use context::{Context, DeviceId};
 use tokio::runtime::{Builder as RuntimeBuilder};
 use encryption::{Cleartext, Ciphertext};
+use prost::Message;
 
 use ::{
     GLOG,
@@ -272,12 +273,15 @@ impl Gateway {
                         let proto_event: output::events::SdkEventBatch =
                             event.into();
 
+                        let mut payload = Vec::new();
+                        proto_event.encode(&mut payload).unwrap();
+
                         let kafka = KAFKA.with(|k| {
-                            k.publish(&proto_event, &context)
+                            k.publish(&payload, &context)
                         });
 
                         let rabbitmq = RABBITMQ.with(|r| {
-                            r.publish(&proto_event, &context)
+                            r.publish(&payload, &context)
                         });
 
                         kafka.join(rabbitmq)
