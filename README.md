@@ -50,7 +50,7 @@ must be imported to the project tree:
 Now it is possible to test the project without errors or warnings:
 
 ```bash
-> cargo build
+> cargo test
    Compiling xorc-gateway v0.1.0 (file:///home/pimeys/code/xorc-gateway)
     Finished dev [unoptimized + debuginfo] target(s) in 8.15 secs
      Running target/debug/deps/xorc_gateway-32f227ea61bfcfef
