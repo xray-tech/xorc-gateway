@@ -180,22 +180,25 @@ impl Gateway {
                 let tracking_enabled = event.device.ifa_tracking_enabled;
 
                 let get_id = lazy(move || poll_fn(move || blocking(|| {
-                    let device_id = ENTITY_STORAGE.get_id_for_ifa(&app_id, &ifa, tracking_enabled)
-                        .map(move |device_id| {
-                            let cleartext = Cleartext::from(device_id);
-                            let ciphertext = Ciphertext::encrypt(&cleartext);
+                    let device_id = ENTITY_STORAGE.with(|s| {
+                        s.get_id_for_ifa(&app_id, &ifa, tracking_enabled)
+                    }).map(move |device_id| {
+                        let cleartext = Cleartext::from(device_id);
+                        let ciphertext = Ciphertext::encrypt(&cleartext);
 
-                            DeviceId { cleartext, ciphertext }
-                        }).unwrap_or_else(|| {
-                            DeviceId::generate()
-                        });
+                        DeviceId { cleartext, ciphertext }
+                    }).unwrap_or_else(|| {
+                        DeviceId::generate()
+                    });
 
-                    let _ = ENTITY_STORAGE.put_id_for_ifa(
-                        &app_id,
-                        &device_id.cleartext,
-                        &ifa,
-                        tracking_enabled
-                    );
+                    let _ = ENTITY_STORAGE.with(|s| {
+                        s.put_id_for_ifa(
+                            &app_id,
+                            &device_id.cleartext,
+                            &ifa,
+                            tracking_enabled
+                        )
+                    });
 
                     device_id.ciphertext
                 })));
@@ -269,8 +272,13 @@ impl Gateway {
                         let proto_event: output::events::SdkEventBatch =
                             event.into();
 
-                        let kafka = KAFKA.publish(&proto_event, &context);
-                        let rabbitmq = RABBITMQ.publish(&proto_event, &context);
+                        let kafka = KAFKA.with(|k| {
+                            k.publish(&proto_event, &context)
+                        });
+
+                        let rabbitmq = RABBITMQ.with(|r| {
+                            r.publish(&proto_event, &context)
+                        });
 
                         kafka.join(rabbitmq)
                             .or_else(|e| { err((e, None)) })
