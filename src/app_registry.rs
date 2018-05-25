@@ -126,6 +126,11 @@ impl AppRegistry {
         }
     }
 
+    pub fn token_for(&self, app_id: &str) -> Option<String> {
+        let apps = self.apps.get();
+        apps.get(app_id).and_then(|a| a.token.clone())
+    }
+
     /// Validates the incoming request for several things:
     ///
     /// * Does the application ID exist,
@@ -152,12 +157,9 @@ impl AppRegistry {
             .as_ref()
             .unwrap_or(&CONFIG.gateway.default_token);
 
-        let sent_token = context
-            .api_token
-            .as_ref()
-            .ok_or(GatewayError::MissingToken)?;
-
-        if sent_token != valid_token { return Err(GatewayError::InvalidToken) }
+        if let Some(ref sent_token) = context.api_token {
+            if sent_token != valid_token { return Err(GatewayError::InvalidToken) }
+        }
 
         if event.events.len() == 0 {
             warn!("Received a request without any events in it!");
@@ -362,9 +364,9 @@ mod tests {
         let app = AppRegistry::create_app(
             420,
             None,
-            Some(IOS_SECRET.as_bytes().to_vec()),
-            Some(ANDROID_SECRET.as_bytes().to_vec()),
-            Some(WEB_SECRET.as_bytes().to_vec()),
+            Some(IOS_SECRET.to_string()),
+            Some(ANDROID_SECRET.to_string()),
+            Some(WEB_SECRET.to_string()),
         );
 
         assert!(app.ios_secret.is_some());
@@ -555,30 +557,6 @@ mod tests {
             Err(GatewayError::AppDoesNotExist),
             app_registry.validate(
                 &create_test_event("2", "web"),
-                &context,
-                "kulli".as_bytes()
-            )
-        );
-    }
-
-    #[test]
-    fn test_validate_missing_token() {
-        let mut header_map = HeaderMap::new();
-
-        header_map.insert(
-            "D360-Signature",
-            HeaderValue::from_static(
-                "iamp0NMGsLvLTsoTSRRKQn4uTThETrkdk7hjCX0jqDXdjNyOv/tRK9C9cnPhi4IIvP4Fj/kP/5L8waXx3fokOg=="
-            ),
-        );
-
-        let context = Context::new(&header_map, "123", Platform::Ios);
-        let app_registry = AppRegistry::new();
-
-        assert_eq!(
-            Err(GatewayError::MissingToken),
-            app_registry.validate(
-                &create_test_event("1", "web"),
                 &context,
                 "kulli".as_bytes()
             )

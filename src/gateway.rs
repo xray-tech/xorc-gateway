@@ -175,16 +175,14 @@ impl Gateway {
     }
 
     fn create_new_device(
-        context: Context,
+        mut context: Context,
         event: SDKEventBatch,
         event_id: String,
     ) -> impl Future<Item=(Vec<EventResult>, Context, SDKEventBatch), Error=GatewayError>
     {
-        let ciphertext = match context.device_id {
+        let fetch_id = match context.device_id {
             Some(ref device_id) => {
-                let ciphertext = device_id.ciphertext.clone();
-
-                Either::A(ok(ciphertext))
+                Either::A(ok(device_id.clone()))
             },
             _ => {
                 let app_id = context.app_id.clone();
@@ -212,14 +210,27 @@ impl Gateway {
                         )
                     });
 
-                    device_id.ciphertext
+                    device_id
                 })));
 
                 Either::B(get_id)
             }
         };
 
-        ciphertext.map(|ciphertext: Ciphertext| {
+        fetch_id.map(|device_id: DeviceId| {
+            let ciphertext = if context.device_id.is_none() {
+                let ciphertext = device_id.ciphertext.clone();
+                context.device_id = Some(device_id);
+
+                ciphertext
+            } else {
+                device_id.ciphertext
+            };
+
+            if context.api_token.is_none() {
+                context.api_token = APP_REGISTRY.token_for(&context.app_id);
+            }
+
             let results = vec![EventResult::register(
                 event_id,
                 EventStatus::Success,

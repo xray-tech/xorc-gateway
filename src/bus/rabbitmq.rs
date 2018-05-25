@@ -8,7 +8,6 @@ use lapin_futures::{
 
 use std::{
     u32,
-    thread,
     net::{
         SocketAddr,
         ToSocketAddrs,
@@ -17,20 +16,18 @@ use std::{
 
 use futures::{
     Future,
-    future::lazy,
 };
 
-use tokio;
 use tokio::net::TcpStream;
 use context::{Context, DeviceId};
 use error::GatewayError;
 use ::CONFIG;
 
+static RULE_ENGINE_PARTITIONS: u32 = 256;
+
 pub struct RabbitMq {
     channel: Channel<TcpStream>,
 }
-
-static RULE_ENGINE_PARTITIONS: u32 = 256;
 
 impl RabbitMq {
     pub fn new() -> RabbitMq {
@@ -49,32 +46,11 @@ impl RabbitMq {
             ..Default::default()
         };
 
-        let connecting = TcpStream::connect(&address)
-            .and_then(move |stream| Client::connect(stream, &connection_options))
-            .and_then(|(client, heartbeat_future_fn)| {
-                let heartbeat_client = client.clone();
+        let stream = TcpStream::connect(&address).wait().unwrap();
+        let (client, _) = Client::connect(stream, &connection_options).wait().unwrap();
+        let channel = client.create_channel().wait().unwrap();
 
-                thread::Builder::new()
-                    .name("heartbeat thread".to_string())
-                    .spawn(move || {
-                        tokio::run(lazy(move || {
-                            heartbeat_future_fn(&heartbeat_client)
-                                .map(|s| {
-                                    info!("Producer heartbeat thread exited cleanly ({:?})", s);
-                                })
-                                .map_err(|e| {
-                                    error!("Producer heartbeat thread crashed, going down... ({:?})", e);
-                                })
-                        }))
-                    })
-                    .unwrap();
-
-                client.create_channel()
-            });
-
-        RabbitMq {
-            channel: connecting.wait().unwrap(),
-        }
+        RabbitMq { channel }
     }
 
     pub fn publish(

@@ -1,0 +1,44 @@
+[gateway]
+address = "0.0.0.0:1337"
+threads = 4
+process_name_prefix = "sdk-gateway-worker-"
+default_token = "T0BdxB0O/+eRZhN6REPmbYpTqjxCTtUgirbW7ABJ8renKaxoGbHFsOX2iLFhuWaJbZHzmTnvKv15fv/87ceIQQ=="
+allow_empty_signature = false
+
+[kafka]
+brokers = "localhost:9092"
+topic = "test.rule-engine.sdk-events"
+
+[cors]
+allowed_methods = "HERP,DERP"
+allowed_headers = "Content-Type, Content-Length"
+
+[rabbitmq]
+exchange = "rule-engine-direct"
+vhost = "/"
+host = "localhost"
+port = 5672
+login = "guest"
+password = "guest"
+
+[aerospike]
+nodes = "localhost:3000"
+namespace = "test"
+
+[postgres]
+uri = "postgres://root:kulli@localhost:5432/crm"
+pool_size = 1
+min_idle = 1
+idle_timeout = 90000
+max_lifetime = 1800000
+
+[[origins]]
+app_id = 34
+allowed = ["http://localhost:5401", "https://reddit.com"]
+
+[[test_apps]]
+app_id = 34
+token = "46732a28cd445366c6c8dcbd57500af4e69597c8ebe224634d6ccab812275c9c"
+secret_android = "d685e53ae50c945e5ae4f36170d7213360a25ed91b91a647574aa384d2b6f901"
+secret_ios = "1b66af517dd60807aeff8b4582d202ef500085bc0cec92bc3e67f0c58d6203b5"
+secret_web = "4c553960fdc2a82f90b84f6ef188e836818fcee2c43a6c32bd6c91f41772657f"
