@@ -72,7 +72,7 @@ The system is configuration is handled through a
 ### Environment variables
 
 variable | description                                                   | example
--------------------------------------------------------------------------|----------------------------------
+---------|---------------------------------------------------------------|----------------------------------
 CONFIG   | The configuration file location                               | `/etc/xorc-gateway/config.toml`
 SECRET   | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
 
