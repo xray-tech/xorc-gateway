@@ -95,18 +95,15 @@ impl AppRegistry {
                 .fold(HashMap::new(), |mut acc, test_app| {
                     let ios_secret = test_app
                         .secret_ios
-                        .clone()
-                        .map(|s| s.as_bytes().to_vec());
+                        .clone();
 
                     let android_secret = test_app
                         .secret_android
-                        .clone()
-                        .map(|s| s.as_bytes().to_vec());
+                        .clone();
 
                     let web_secret = test_app
                         .secret_web
-                        .clone()
-                        .map(|s| s.as_bytes().to_vec());
+                        .clone();
 
                     let app = Self::create_app(
                         test_app.app_id,
@@ -208,7 +205,7 @@ impl AppRegistry {
     fn create_key(
         app_id: i32,
         column: &'static str,
-        s: &Vec<u8>
+        s: &[u8]
     ) -> Option<hmac::VerificationKey> {
         hex::decode(s).and_then(|decoded| {
             Ok(hmac::VerificationKey::new(
@@ -229,22 +226,22 @@ impl AppRegistry {
     fn create_app(
         id: i32,
         token: Option<String>,
-        ios_secret: Option<Vec<u8>>,
-        android_secret: Option<Vec<u8>>,
-        web_secret: Option<Vec<u8>>,
+        ios_secret: Option<String>,
+        android_secret: Option<String>,
+        web_secret: Option<String>,
     ) -> Application
     {
         let ios_key = ios_secret
             .as_ref()
-            .and_then(|s| Self::create_key(id, "ios_secret", s));
+            .and_then(|s| Self::create_key(id, "ios_secret", &s.as_bytes()));
 
         let android_key = android_secret
             .as_ref()
-            .and_then(|s| Self::create_key(id, "android_secret", s));
+            .and_then(|s| Self::create_key(id, "android_secret", &s.as_bytes()));
 
         let web_key = web_secret
             .as_ref()
-            .and_then(|s| Self::create_key(id, "web_secret", s));
+            .and_then(|s| Self::create_key(id, "web_secret", &s.as_bytes()));
 
         Application {
             id: id,

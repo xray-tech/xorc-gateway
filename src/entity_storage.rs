@@ -8,6 +8,7 @@ use std::{
 
 // OCD...
 use aerospike::{
+    Key,
     Error,
     Client,
     ErrorKind,
@@ -39,6 +40,19 @@ impl EntityStorage {
         }
     }
 
+    fn as_key(
+        &self,
+        ifa: &str,
+        app_id: &str,
+    ) -> Key
+    {
+        as_key!(
+            self.namespace.clone(),
+            String::from("gw_known_ifas"),
+            format!("{}@{}", ifa, app_id)
+        )
+    }
+
     pub fn get_id_for_ifa<'a>(
         &self,
         app_id: &str,
@@ -51,12 +65,7 @@ impl EntityStorage {
                 ifa_tracking_enabled == true &&
                 ifa != "00000000-0000-0000-0000-000000000000" =>
             {
-                let key = as_key!(
-                    self.namespace.clone(),
-                    String::from("gw_known_ifas"),
-                    format!("{}@{}", ifa, app_id)
-                );
-
+                let key = self.as_key(ifa, app_id);
                 let mut back_off = Duration::from_millis(1);
 
                 for _ in 0..5 {
@@ -94,17 +103,12 @@ impl EntityStorage {
                 ifa_tracking_enabled == true &&
                 ifa != "00000000-0000-0000-0000-000000000000" =>
             {
-                let key = as_key!(
-                    self.namespace.clone(),
-                    String::from("gw_known_ifas"),
-                    format!("{}@{}", ifa, app_id)
-                );
-
                 let bin = as_bin!(
                     "entity_id",
                     device_id.as_ref()
                 );
 
+                let key = self.as_key(ifa, app_id);
                 let mut back_off = Duration::from_millis(1);
 
                 for _ in 0..5 {
