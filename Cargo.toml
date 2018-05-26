@@ -41,6 +41,7 @@ blake2 = "0.7"
 rdkafka = "0.15"
 lapin-futures = "0.11"
 tokio-signal = "0.2"
+tokio-core = "0.1" # ONLY UNTIL RMQ IS GONE
 
 [build-dependencies]
 prost-build = "0.3"

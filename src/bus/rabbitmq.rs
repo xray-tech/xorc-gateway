@@ -17,11 +17,11 @@ use std::{
 
 use futures::{
     Future,
-    future::{lazy},
+    Stream,
 };
 
 use tokio_signal::unix::{Signal, SIGINT};
-use tokio;
+use tokio_core::reactor::Core;
 use tokio::net::TcpStream;
 use context::{Context, DeviceId};
 use error::GatewayError;
@@ -67,20 +67,20 @@ impl RabbitMq {
 
         let _hb_thread: JoinHandle<()> = {
             let heartbeat_client = client.clone();
-            let control = Signal::new(SIGINT);
+            let control = Signal::new(SIGINT).flatten_stream().into_future();
 
             thread::Builder::new()
                 .name("xorc gateway rabbitmq heartbeat".to_string())
                 .spawn(move || {
-                    tokio::run(lazy(move || {
-                        heartbeat_future_fn(&heartbeat_client).select2(control)
-                            .map(|_| {
-                                info!("Producer heartbeat thread exited cleanly");
-                            })
-                            .map_err(|_| {
-                                error!("Producer heartbeat thread crashed, going down...");
-                            })
-                    }));
+                    let mut core = Core::new().unwrap();
+                    match core.run(heartbeat_future_fn(&heartbeat_client).select2(control)) {
+                        Ok(_) => {
+                            info!("Producer heartbeat thread exited cleanly");
+                        },
+                        Err(_) => {
+                            error!("Producer heartbeat thread crashed, going down...");
+                        }
+                    }
                 })
                 .unwrap()
         };
