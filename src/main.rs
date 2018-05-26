@@ -12,8 +12,6 @@ extern crate prost_derive;
 #[macro_use]
 extern crate indoc;
 #[macro_use]
-extern crate chan;
-#[macro_use]
 extern crate aerospike;
 #[macro_use]
 extern crate prometheus;
@@ -40,7 +38,6 @@ extern crate tokio_threadpool;
 extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate postgres;
-extern crate chan_signal;
 extern crate blake2;
 extern crate rdkafka;
 extern crate lapin_futures;
@@ -63,9 +60,9 @@ use gateway::Gateway;
 use entity_storage::EntityStorage;
 use app_registry::AppRegistry;
 use config::Config;
-use chan_signal::{notify, Signal};
-use futures::sync::oneshot;
+use futures::{sync::oneshot, Future, Stream};
 use cors::Cors;
+use tokio_signal::unix::{Signal, SIGINT};
 
 use std::{
     sync::{
@@ -104,7 +101,6 @@ lazy_static! {
 }
 
 fn main() {
-    let exit_signal = notify(&[Signal::INT, Signal::TERM]);
     let control = Arc::new(AtomicBool::new(true));
 
     let mut threads: Vec<JoinHandle<_>> = Vec::new();
@@ -127,17 +123,15 @@ fn main() {
         })
     });
 
-    chan_select! {
-        exit_signal.recv() -> signal => {
-            info!("Received signal: {:?}", signal);
+    let _ = Signal::new(SIGINT).flatten_stream().into_future().and_then(|_| {
+        server_tx.send(()).unwrap();
+        control.store(false, Ordering::Relaxed);
 
-            server_tx.send(()).unwrap();
-            control.store(false, Ordering::Relaxed);
+        for thread in threads {
+            thread.thread().unpark();
+            thread.join().unwrap();
+        }
 
-            for thread in threads {
-                thread.thread().unpark();
-                thread.join().unwrap();
-            }
-        },
-    }
+        Ok(())
+    }).wait();
 }

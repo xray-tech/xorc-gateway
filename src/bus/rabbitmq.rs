@@ -16,17 +16,25 @@ use std::{
 
 use futures::{
     Future,
+    Stream,
 };
 
 use tokio::{self, net::TcpStream};
 use context::{Context, DeviceId};
 use error::GatewayError;
+use tokio_signal::unix::{Signal, SIGINT};
 use ::CONFIG;
 
 static RULE_ENGINE_PARTITIONS: u32 = 256;
 
 pub struct RabbitMq {
     channel: Channel<TcpStream>,
+}
+
+impl Drop for RabbitMq {
+    fn drop(&mut self) {
+        self.channel.close(200, "Bye");
+    }
 }
 
 impl RabbitMq {
@@ -48,11 +56,20 @@ impl RabbitMq {
 
         let stream = TcpStream::connect(&address).wait().unwrap();
 
-        let channel = Client::connect(stream, &connection_options).and_then(|(client, heartbeat)| {
-            tokio::spawn(heartbeat.map_err(|_| ()));
+        let (client, mut heartbeat) = 
+            Client::connect(stream, &connection_options).wait().unwrap();
 
-            client.create_channel()
-        }).wait().unwrap();
+        let handle = heartbeat.handle().unwrap();
+
+        let signal = Signal::new(SIGINT).flatten_stream().into_future().and_then(|_| {
+            handle.stop();
+            Ok(())
+        });
+
+        tokio::spawn(signal.map_err(|_| ()));
+        tokio::spawn(heartbeat.map_err(|_| ()));
+
+        let channel = client.create_channel().wait().unwrap();
 
         RabbitMq { channel }
     }
