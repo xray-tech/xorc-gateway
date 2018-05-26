@@ -22,8 +22,8 @@ prost = "0.3"
 prost-derive = "0.3"
 chrono = "0.4"
 futures = "0.1"
-base64 = "0.6"
-rand = "0.5.0-pre.1"
+base64 = "0.9"
+rand = "0.5"
 uuid = { version = "0.6", features = ["serde", "v4"] }
 tokio = "0.1"
 tokio-threadpool = "0.1"
@@ -33,10 +33,10 @@ r2d2_postgres = "0.14"
 indoc = "0.2"
 crossbeam = "0.3"
 aerospike = "0.2"
-prometheus = { git = "https://github.com/flier/rust-prometheus.git", branch = "protobuf-1.6" }
+prometheus = "0.4"
 maxminddb = "0.8.1"
 blake2 = "0.7"
-rdkafka = "0.15"
+rdkafka = "0.16"
 lapin-futures = { git = "https://github.com/sozu-proxy/lapin.git" }
 tokio-signal = "0.2"
 
