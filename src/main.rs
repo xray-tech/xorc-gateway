@@ -44,6 +44,7 @@ extern crate chan_signal;
 extern crate blake2;
 extern crate rdkafka;
 extern crate lapin_futures;
+extern crate tokio_signal;
 
 mod entity_storage;
 mod error;
