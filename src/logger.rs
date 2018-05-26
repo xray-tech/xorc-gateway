@@ -165,22 +165,7 @@ impl GelfLogger {
         msg.set_level(level);
 
         if let Some(ref context) = context {
-            if let Some(ref api_token) = context.api_token {
-                msg.set_metadata("api_token", format!("{}", api_token))?;
-            };
-
-            if let Some(ref device_id) = context.device_id {
-                msg.set_metadata("encrypted_device_id", format!("{}", device_id.ciphertext))?;
-                msg.set_metadata("device_id", format!("{}", device_id.cleartext))?;
-            }
-
-            if let Some(ref signature) = context.signature {
-                msg.set_metadata("signature", format!("{}", signature))?;
-            };
-
-            if let Some(ref ip) = context.ip {
-                msg.set_metadata("ip", format!("{}", ip))?;
-            };
+            self.add_context(&mut msg, context)?;
         }
 
         self.log_message(msg);
@@ -258,5 +243,31 @@ impl GelfLogger {
                 }
             }
         }
+    }
+
+    fn add_context(
+        &self,
+        msg: &mut Message,
+        context: &Context
+    ) -> Result<(), Error>
+    {
+        if let Some(ref api_token) = context.api_token {
+            msg.set_metadata("api_token", format!("{}", api_token))?;
+        };
+
+        if let Some(ref device_id) = context.device_id {
+            msg.set_metadata("encrypted_device_id", format!("{}", device_id.ciphertext))?;
+            msg.set_metadata("device_id", format!("{}", device_id.cleartext))?;
+        }
+
+        if let Some(ref signature) = context.signature {
+            msg.set_metadata("signature", format!("{}", signature))?;
+        };
+
+        if let Some(ref ip) = context.ip {
+            msg.set_metadata("ip", format!("{}", ip))?;
+        };
+
+        Ok(())
     }
 }

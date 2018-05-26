@@ -309,6 +309,8 @@ impl Gateway {
                         kafka.join(rabbitmq)
                             .or_else(|e| { err((e, None)) })
                             .map(move |_| {
+                                EVENTS_COUNTER.inc_by(results.len() as f64);
+
                                 (
                                     serde_json::to_string(&SDKResponse::from(results)).unwrap(),
                                     context
