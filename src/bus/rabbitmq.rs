@@ -8,7 +8,6 @@ use lapin_futures::{
 
 use std::{
     u32,
-    thread::{self, JoinHandle},
     net::{
         SocketAddr,
         ToSocketAddrs,
@@ -17,12 +16,9 @@ use std::{
 
 use futures::{
     Future,
-    Stream,
 };
 
-use tokio_signal::unix::{Signal, SIGINT};
-use tokio_core::reactor::Core;
-use tokio::net::TcpStream;
+use tokio::{self, net::TcpStream};
 use context::{Context, DeviceId};
 use error::GatewayError;
 use ::CONFIG;
@@ -31,13 +27,6 @@ static RULE_ENGINE_PARTITIONS: u32 = 256;
 
 pub struct RabbitMq {
     channel: Channel<TcpStream>,
-    _hb_thread: JoinHandle<()>,
-}
-
-impl Drop for RabbitMq {
-    fn drop(&mut self) {
-        self.channel.close(200, "Bye");
-    }
 }
 
 impl RabbitMq {
@@ -59,35 +48,13 @@ impl RabbitMq {
 
         let stream = TcpStream::connect(&address).wait().unwrap();
 
-        let (client, heartbeat_future_fn) =
-            Client::connect(
-                stream,
-                &connection_options
-            ).wait().unwrap();
+        let channel = Client::connect(stream, &connection_options).and_then(|(client, heartbeat)| {
+            tokio::spawn(heartbeat.map_err(|_| ()));
 
-        let _hb_thread: JoinHandle<()> = {
-            let heartbeat_client = client.clone();
-            let control = Signal::new(SIGINT).flatten_stream().into_future();
+            client.create_channel()
+        }).wait().unwrap();
 
-            thread::Builder::new()
-                .name("xorc gateway rabbitmq heartbeat".to_string())
-                .spawn(move || {
-                    let mut core = Core::new().unwrap();
-                    match core.run(heartbeat_future_fn(&heartbeat_client).select2(control)) {
-                        Ok(_) => {
-                            info!("Producer heartbeat thread exited cleanly");
-                        },
-                        Err(_) => {
-                            error!("Producer heartbeat thread crashed, going down...");
-                        }
-                    }
-                })
-                .unwrap()
-        };
-
-        let channel = client.create_channel().wait().unwrap();
-
-        RabbitMq { channel, _hb_thread }
+        RabbitMq { channel }
     }
 
     pub fn publish(

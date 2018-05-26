@@ -39,9 +39,8 @@ prometheus = { git = "https://github.com/flier/rust-prometheus.git", branch = "p
 maxminddb = "0.8.1"
 blake2 = "0.7"
 rdkafka = "0.15"
-lapin-futures = "0.11"
+lapin-futures = { git = "https://github.com/sozu-proxy/lapin.git" }
 tokio-signal = "0.2"
-tokio-core = "0.1" # ONLY UNTIL RMQ IS GONE
 
 [build-dependencies]
 prost-build = "0.3"
