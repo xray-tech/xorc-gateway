@@ -64,6 +64,31 @@ running XX tests
 test result: ok. XX passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
+## Development setup
+
+To run XORC gateway, the required services can be created and started with
+`docker-compose`.
+
+To build everything, only needed for the first time or when changing something
+in the configuration:
+
+```bash
+> docker-compose build
+```
+
+To run the services:
+
+```bash
+> docker-compose up
+```
+
+Configuration to use these local services is in `config/config.toml.developemt`,
+so to start XORC gateway with it, including logging and stacktraces:
+
+```bash
+> env RUST_STACKTRACE=1 RUST_LOG=info CONFIG=config/config.toml.development cargo run
+```
+
 ## Configuration
 
 The system is configuration is handled through a
