@@ -96,30 +96,30 @@ The system is configuration is handled through a
 
 ### Environment variables
 
-variable | description                                                   | example
----------|---------------------------------------------------------------|----------------------------------
-CONFIG   | The configuration file location                               | `/etc/xorc-gateway/config.toml`
-SECRET   | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
+variable   | description                                                   | example
+-----------|---------------------------------------------------------------|----------------------------------
+`CONFIG`   | The configuration file location                               | `/etc/xorc-gateway/config.toml`
+`SECRET`   | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
 
 ### Required options
 
-section     | key                     | description                                                 | example
-------------|-------------------------|-------------------------------------------------------------|------------------------
-[gateway]   | address                 | The IP and port the server listens to                       | `"0.0.0.0:1337"`
-[gateway]   | threads                 | Number of worker threads for the server                     | `4`
-[gateway]   | process\_name\_prefix   | The prefix how worker threads are named in the process list | `"sdk-gateway-worker-"`
-[gateway]   | default\_token          | Base64 encoded token used if app does not have one set      | `"<<HEXSTRING_DATA>>"`
-[gateway]   | allow\_empty\_signature | If true, system doesn't require a signed payload            | `false`
-[kafka]     | brokers                 | A list of Kafka brokers separated with a comma              | `"kafka:9092,kafka:9093"`
-[kafka]     | topic                   | The topic we should write the incoming events               | `"test.foobar"`
-[rabbitmq]  | exchange                | The exchange we should write the incoming events            | `"test-foobar"`
-[rabbitmq]  | vhost                   | Virtual host, by if none, should be `/`                     | `"/"`
-[rabbitmq]  | host                    | Hostname                                                    | `"localhost"`
-[rabbitmq]  | port                    | Port                                                        | `5672`
-[rabbitmq]  | login                   | Username                                                    | `"guest"`
-[rabbitmq]  | password                | Password                                                    | `"guest"`
-[aerospike] | nodes                   | A list of Aerospike nodes to connect                        | `"as:3001,as:3002"`
-[aerospike] | namespace               | The namespace/environment                                   | `"staging"`
+section       | key                     | description                                                 | example
+--------------|-------------------------|-------------------------------------------------------------|------------------------
+`[gateway]`   | `address`                 | The IP and port the server listens to                       | `"0.0.0.0:1337"`
+`[gateway]`   | `threads`                 | Number of worker threads for the server                     | `4`
+`[gateway]`   | `process\_name\_prefix`   | The prefix how worker threads are named in the process list | `"sdk-gateway-worker-"`
+`[gateway]`   | `default\_token`          | Base64 encoded token used if app does not have one set      | `"<<HEXSTRING_DATA>>"`
+`[gateway]`   | `allow\_empty\_signature` | If true, system doesn't require a signed payload            | `false`
+`[kafka]`     | `brokers`                 | A list of Kafka brokers separated with a comma              | `"kafka:9092,kafka:9093"`
+`[kafka]`     | `topic`                   | The topic we should write the incoming events               | `"test.foobar"`
+`[rabbitmq]`  | `exchange`                | The exchange we should write the incoming events            | `"test-foobar"`
+`[rabbitmq]`  | `vhost`                   | Virtual host, by if none, should be `/`                     | `"/"`
+`[rabbitmq]`  | `host`                    | Hostname                                                    | `"localhost"`
+`[rabbitmq]`  | `port`                    | Port                                                        | `5672`
+`[rabbitmq]`  | `login`                   | Username                                                    | `"guest"`
+`[rabbitmq]`  | `password`                | Password                                                    | `"guest"`
+`[aerospike]` | `nodes`                   | A list of Aerospike nodes to connect                        | `"as:3001,as:3002"`
+`[aerospike]` | `namespace`               | The namespace/environment                                   | `"staging"`
 
 ### Optional options
 
@@ -129,16 +129,16 @@ If enabled, allows JavaScript clients to use the API.
 
 section| key                     | description                                                 | example
 -------|-------------------------|-------------------------------------------------------------|------------------------
-[cors] | allowed\_methods        | The contents of the `Access-Control-Allowed-Methods` header | `"GET,POST"`
-[cors] | allowed\_headers        | The contents of the `Access-Control-Allowed-Headers` header | `"Content-Type,Content-Length"`
+`[cors]` | `allowed\_methods`        | The contents of the `Access-Control-Allowed-Methods` header | `"GET,POST"`
+`[cors]` | `allowed\_headers`        | The contents of the `Access-Control-Allowed-Headers` header | `"Content-Type,Content-Length"`
 
 If including the `[cors]` section in the configuration, the config must have at
 least one `[[origins]]` included.
 
 section     | key     | description                 | example
 ------------|---------|-----------------------------|-----------------------------------------------
-[[origins]] | app\_id | The application ID          | `420`
-[[origins]] | allowed | An array of allowed origins | `["https://reddit.com", "https://google.com"]`
+`[[origins]]` | `app\_id` | The application ID          | `420`
+`[[origins]]` | `allowed` | An array of allowed origins | `["https://reddit.com", "https://google.com"]`
 
 #### PostgreSQL
 
@@ -147,21 +147,21 @@ from the CRM PostgreSQL database.
 
 section    | key           | description                                              | example
 -----------|---------------|----------------------------------------------------------|-----------------------------------------------
-[postgres] | uri           | The URI to the server                                    | `"postgres://login:password@host:port/database"`
-[postgres] | pool\_size    | The maximum number of open connections                   | `1`
-[postgres] | min\_idle     | The minimum number of idle connections                   | `1`
-[postgres] | idle\_timeout | If idle, how many milliseconds to keep a connection open | `90000`
-[postgres] | max\_lifetime | The maximum amount of time to keep a connection open     | `1800000`
+`[postgres]` | `uri`           | The URI to the server                                    | `"postgres://login:password@host:port/database"`
+`[postgres]` | `pool\_size`    | The maximum number of open connections                   | `1`
+`[postgres]` | `min\_idle`     | The minimum number of idle connections                   | `1`
+`[postgres]` | `idle\_timeout` | If idle, how many milliseconds to keep a connection open | `90000`
+`[postgres]` | `max\_lifetime` | The maximum amount of time to keep a connection open     | `1800000`
 
 If the section doesn't exist, the config must have at least one `[[test_apps]]` included.
 
 section        | key             | description                                                         | example
 ---------------|-----------------|---------------------------------------------------------------------|-----------------------
-[[test\_apps]] | app\_id         | The application ID                                                  | `420`
-[[test\_apps]] | token           | The application token that should match the `D360-Api-Token` header | `"<<HEXSTRING_DATA>>"`
-[[test\_apps]] | secret\_android | Requests from Android platform should be signed with this           | `"<<HEXSTRING_DATA>>"`
-[[test\_apps]] | secret\_ios     | Requests from iOS platform should be signed with this               | `"<<HEXSTRING_DATA>>"`
-[[test\_apps]] | secret\_web     | Requests from web platform should be signed with this               | `"<<HEXSTRING_DATA>>"`
+`[[test\_apps]]` | `app\_id`         | The application ID                                                  | `420`
+`[[test\_apps]]` | `token`           | The application token that should match the `D360-Api-Token` header | `"<<HEXSTRING_DATA>>"`
+`[[test\_apps]]` | `secret\_android` | Requests from Android platform should be signed with this           | `"<<HEXSTRING_DATA>>"`
+`[[test\_apps]]` | `secret\_ios`     | Requests from iOS platform should be signed with this               | `"<<HEXSTRING_DATA>>"`
+`[[test\_apps]]` | `secret\_web`     | Requests from web platform should be signed with this               | `"<<HEXSTRING_DATA>>"`
 
 ### Code Architecture
 
@@ -192,7 +192,8 @@ The request pipeline is:
 - Check authentication for the application (in
   [app_registry.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/app_registry.rs)
   for the validation,
-  [encryption.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/encryption.rs)+[context.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/context.rs)
+  [encryption.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/encryption.rs) +
+  [context.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/context.rs)
   for device id decrytpion)
 - If needed, load a device ID from Aerospike, save a new ID back to Aerospike
   ([entity_storage.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/entity_storage.rs) +
