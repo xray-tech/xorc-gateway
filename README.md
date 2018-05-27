@@ -199,6 +199,6 @@ The request pipeline is:
   [gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs))
 - Send a protobuf event to Kafka and RabbitMQ
   ([gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs) +
-  [bus](github.com/360dialog/xorc-gateway/tree/master/src/bus))
+  [bus](https://github.com/360dialog/xorc-gateway/tree/master/src/bus))
 - Respond back to the client
   ([gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs))
