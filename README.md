@@ -185,8 +185,20 @@ and the structs are automatically generated every time the project is built.
 
 The request pipeline is:
 
-- Parse JSON
-- Check authentication for the application
+- Parse JSON (in
+  [gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs)
+  and
+  [events/input](https://github.com/360dialog/xorc-gateway/tree/master/src/events/input))
+- Check authentication for the application (in
+  [app_registry.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/app_registry.rs)
+  for the validation,
+  [encryption.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/encryption.rs)+[context.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/context.rs)
+  for device id decrytpion)
 - If needed, load a device ID from Aerospike, save a new ID back to Aerospike
+  ([entity_storage.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/entity_storage.rs) +
+  [gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs))
 - Send a protobuf event to Kafka and RabbitMQ
+  ([gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs) +
+  [bus](github.com/360dialog/xorc-gateway/tree/master/src/bus))
 - Respond back to the client
+  ([gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs))
