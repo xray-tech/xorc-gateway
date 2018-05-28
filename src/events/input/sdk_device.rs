@@ -64,8 +64,8 @@ impl SDKDevice {
         let hash = hasher.result();
         self.ip_hashed_blake2 = Some(base64::encode(hash.as_slice()));
 
-        self.country = GEOIP
-            .with(|geo_ip| geo_ip.lookup(ip.clone()).ok())
+        self.country = GEOIP.lookup(ip.clone())
+            .ok()
             .and_then(|res: Country| res.country)
             .and_then(|res| res.iso_code);
     }

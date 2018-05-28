@@ -8,6 +8,7 @@ use lapin_futures::{
 
 use std::{
     u32,
+    thread::{JoinHandle, self},
     net::{
         SocketAddr,
         ToSocketAddrs,
@@ -19,7 +20,8 @@ use futures::{
     Stream,
 };
 
-use tokio::{self, net::TcpStream};
+use tokio_threadpool;
+use tokio::{net::TcpStream, runtime};
 use context::{Context, DeviceId};
 use error::GatewayError;
 use tokio_signal::unix::{Signal, SIGINT};
@@ -29,11 +31,13 @@ static RULE_ENGINE_PARTITIONS: u32 = 256;
 
 pub struct RabbitMq {
     channel: Channel<TcpStream>,
+    handle: Option<JoinHandle<()>>
 }
 
 impl Drop for RabbitMq {
     fn drop(&mut self) {
         self.channel.close(200, "Bye");
+        self.handle.take().unwrap().join().unwrap();
     }
 }
 
@@ -56,22 +60,31 @@ impl RabbitMq {
 
         let stream = TcpStream::connect(&address).wait().unwrap();
 
-        let (client, mut heartbeat) = 
+        let (client, heartbeat) =
             Client::connect(stream, &connection_options).wait().unwrap();
 
-        let handle = heartbeat.handle().unwrap();
+        let handle =
+            thread::spawn(move || {
+                info!("Starting the heartbeat thread");
+                let signal = Signal::new(SIGINT).flatten_stream().into_future();
 
-        let signal = Signal::new(SIGINT).flatten_stream().into_future().and_then(|_| {
-            handle.stop();
-            Ok(())
-        });
+                let mut threadpool_builder = tokio_threadpool::Builder::new();
+                threadpool_builder
+                    .name_prefix("rabbitmq_heartbeat")
+                    .pool_size(1);
 
-        tokio::spawn(signal.map_err(|_| ()));
-        tokio::spawn(heartbeat.map_err(|_| ()));
+                let mut runtime = runtime::Builder::new()
+                    .threadpool_builder(threadpool_builder)
+                    .build().unwrap();
+
+                runtime.spawn(heartbeat.select2(signal).then(move |_| Ok(())));
+                runtime.shutdown_on_idle().wait().unwrap();
+            });
+
 
         let channel = client.create_channel().wait().unwrap();
 
-        RabbitMq { channel }
+        RabbitMq { channel, handle: Some(handle) }
     }
 
     pub fn publish(

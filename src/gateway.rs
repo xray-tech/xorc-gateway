@@ -13,6 +13,7 @@ use hyper::{
 
 use std::{
     net::ToSocketAddrs,
+    sync::Arc,
 };
 
 use futures::{
@@ -44,6 +45,7 @@ use tokio_threadpool::{
     blocking,
 };
 
+use bus;
 use serde_json;
 use error::{self, GatewayError};
 use context::{Context, DeviceId};
@@ -58,22 +60,37 @@ use ::{
     CORS,
     CONFIG,
     ENTITY_STORAGE,
-    KAFKA,
-    RABBITMQ,
 };
 
-pub struct Gateway {}
+struct BusConnections {
+    pub kafka: bus::Kafka,
+    pub rabbitmq: bus::RabbitMq,
+}
+
+pub struct Gateway {
+    connections: Arc<BusConnections>,
+}
 
 type ErrorWithContext = (GatewayError, Option<Context>);
 
 impl Gateway {
+    fn new() -> Gateway {
+        let connections = Arc::new(BusConnections {
+            kafka: bus::Kafka::new(),
+            rabbitmq: bus::RabbitMq::new(),
+        });
+
+        Gateway { connections }
+    }
+
     /// ROUTES
     ///
     /// - OPTIONS to /     :: for CORS/web-push
     /// - POST to /        :: SDK Events, sent to kafka/rmq
     /// - GET to /watchdog :: Prometheus metrics
     fn service(
-        req: Request<Body>
+        &self,
+        req: Request<Body>,
     ) -> Box<Future<Item=Response<Body>, Error=GatewayError> + Send + 'static>
     {
         match (req.method(), req.uri().path()) {
@@ -85,7 +102,7 @@ impl Gateway {
             (&Method::POST, "/") => {
                 let timer = RESPONSE_TIMES_HISTOGRAM.start_timer();
 
-                Box::new(Self::handle_sdk(req).then(|response| {
+                Box::new(Self::handle_sdk(req, self.connections.clone()).then(|response| {
                     timer.observe_duration();
                     response
                 }))
@@ -121,10 +138,13 @@ impl Gateway {
             .threadpool_builder(threadpool_builder)
             .build().unwrap();
 
+        let gateway = Arc::new(Self::new());
+
         let server = Server::bind(&addr)
             .serve(move || {
+                let gw = gateway.clone();
                 service_fn(move |req: Request<Body>| {
-                    Self::service(req)
+                    gw.service(req)
                 })
             })
             .map_err(|e| println!("Critical server error, exiting: {}", e));
@@ -190,25 +210,23 @@ impl Gateway {
                 let tracking_enabled = event.device.ifa_tracking_enabled;
 
                 let get_id = lazy(move || poll_fn(move || blocking(|| {
-                    let device_id = ENTITY_STORAGE.with(|s| {
-                        s.get_id_for_ifa(&app_id, &ifa, tracking_enabled)
-                    }).map(move |device_id| {
-                        let cleartext = Cleartext::from(device_id);
-                        let ciphertext = Ciphertext::encrypt(&cleartext);
+                    let device_id = ENTITY_STORAGE
+                        .get_id_for_ifa(&app_id, &ifa, tracking_enabled)
+                        .map(move |device_id| {
+                            let cleartext = Cleartext::from(device_id);
+                            let ciphertext = Ciphertext::encrypt(&cleartext);
 
-                        DeviceId { cleartext, ciphertext }
-                    }).unwrap_or_else(|| {
-                        DeviceId::generate()
-                    });
+                            DeviceId { cleartext, ciphertext }
+                        }).unwrap_or_else(|| {
+                            DeviceId::generate()
+                        });
 
-                    let _ = ENTITY_STORAGE.with(|s| {
-                        s.put_id_for_ifa(
-                            &app_id,
-                            &device_id.cleartext,
-                            &ifa,
-                            tracking_enabled
-                        )
-                    });
+                    let _ = ENTITY_STORAGE.put_id_for_ifa(
+                        &app_id,
+                        &device_id.cleartext,
+                        &ifa,
+                        tracking_enabled
+                    );
 
                     device_id
                 })));
@@ -266,6 +284,7 @@ impl Gateway {
         body: Vec<u8>,
         mut event: SDKEventBatch,
         headers: HeaderMap,
+        connections: Arc<BusConnections>
     ) -> impl Future<Item=(String, Context), Error=ErrorWithContext> + 'static + Send
     {
         let context = Context::new(
@@ -298,13 +317,8 @@ impl Gateway {
                         let mut payload = Vec::new();
                         proto_event.encode(&mut payload).unwrap();
 
-                        let kafka = KAFKA.with(|k| {
-                            k.publish(&payload, &context)
-                        });
-
-                        let rabbitmq = RABBITMQ.with(|r| {
-                            r.publish(&payload, &context)
-                        });
+                        let kafka = connections.kafka.publish(&payload, &context);
+                        let rabbitmq = connections.rabbitmq.publish(&payload, &context);
 
                         kafka.join(rabbitmq)
                             .or_else(|e| { err((e, None)) })
@@ -328,7 +342,8 @@ impl Gateway {
 
     /// The request level SDK event handling
     fn handle_sdk(
-        req: Request<Body>
+        req: Request<Body>,
+        connections: Arc<BusConnections>
     ) -> impl Future<Item=Response<Body>, Error=GatewayError> + 'static + Send
     {
         let (head, body) = req.into_parts();
@@ -344,6 +359,7 @@ impl Gateway {
                             body.to_vec(),
                             event,
                             headers,
+                            connections
                         );
 
                     Either::A(event_handling)

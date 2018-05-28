@@ -74,13 +74,9 @@ use std::{
     env,
 };
 
-/// We need one copy of these for every thread in the pool for maximum
-/// performance.
-thread_local! {
-    pub static ENTITY_STORAGE: EntityStorage = EntityStorage::new();
-    pub static KAFKA: bus::Kafka = bus::Kafka::new();
-    pub static RABBITMQ: bus::RabbitMq = bus::RabbitMq::new();
-    pub static GEOIP: maxminddb::Reader =
+/// Global non-IO services that can be raced from all the threads.
+lazy_static! {
+    pub static ref GEOIP: maxminddb::Reader =
         match env::var("GEOIP") {
             Ok(geoip_location) => {
                 maxminddb::Reader::open(&geoip_location).unwrap()
@@ -89,10 +85,8 @@ thread_local! {
                 maxminddb::Reader::open("./resources/GeoLite2-Country.mmdb").unwrap()
             }
         };
-}
 
-/// Global non-IO services that can be raced from all the threads.
-lazy_static! {
+    pub static ref ENTITY_STORAGE: EntityStorage = EntityStorage::new();
     pub static ref GLOG: logger::GelfLogger =
         logger::GelfLogger::new().unwrap();
 
