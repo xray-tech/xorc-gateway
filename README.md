@@ -51,7 +51,7 @@ To get correct country codes to the events, the system uses Maxmind's country
 code database and for the development it is possible to use the free lite
 version. By default the system expects to find the file from
 `resources/GeoLite2-Country.mmdb`, but can be changed with the `GEOIP`
-environment variable. Due licensing issues we can't provide the file with the
+environment variable. Due to licensing issues we can't provide the file with the
 repository, but it's freely available from [Maxmind's
 website](https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz).
 
