@@ -2,3 +2,4 @@ src/proto_events/*
 !src/protobuf_events/mod.rs
 config/config.toml
 target
+resources/GeoLite2-Country.mmdb

@@ -287,7 +287,7 @@ impl Gateway {
 
         match APP_REGISTRY.validate(&event, &context, &body) {
             Ok(()) => {
-                if let Some(ref ip) = context.ip { event.device.set_ip_and_country(ip) }
+                if let Some(ref ip) = context.ip { event.device.set_location(ip) }
 
                 let response = Self::generate_event_results(context, event)
                     .map_err(|e| (e, None))

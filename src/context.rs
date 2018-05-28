@@ -92,7 +92,7 @@ impl Context {
             device_id: device_id,
             signature: Self::get_value(&headers, "D360-Signature"),
             ip: ip_addr,
-            origin: Self::get_value(&headers, header::ORIGIN)
+            origin: Self::get_value(&headers, header::ORIGIN),
         }
     }
 
@@ -137,7 +137,10 @@ mod tests {
 
         let context = Context::new(&header_map, "123", Platform::Ios);
 
-        assert_eq!(context.ip, Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))));
+        assert_eq!(
+            Some(IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))),
+            context.ip,
+        );
     }
 
     #[test]
@@ -152,7 +155,10 @@ mod tests {
 
         let context = Context::new(&header_map, "123", Platform::Ios);
 
-        assert_eq!(context.ip, Some(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))));
+        assert_eq!(
+            Some(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))),
+            context.ip
+        );
     }
 
     #[test]

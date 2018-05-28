@@ -2,6 +2,8 @@ use events::output::common;
 use std::net::IpAddr;
 use blake2::{Blake2b, Digest};
 use base64;
+use maxminddb::geoip2::Country;
+use ::GEOIP;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Platform {
@@ -49,10 +51,11 @@ pub struct SDKDevice
     pub orientation: Option<String>,
     pub platform: Option<String>,
     pub ip_hashed_blake2: Option<String>,
+    pub country: Option<String>,
 }
 
 impl SDKDevice {
-    pub fn set_ip_and_country(&mut self, ip: &IpAddr) {
+    pub fn set_location(&mut self, ip: &IpAddr) {
         let data = format!("{}", ip);
 
         let mut hasher = Blake2b::new();
@@ -60,7 +63,11 @@ impl SDKDevice {
 
         let hash = hasher.result();
         self.ip_hashed_blake2 = Some(base64::encode(hash.as_slice()));
-        // TODO: maxmind here!
+
+        self.country = GEOIP
+            .with(|geo_ip| geo_ip.lookup(ip.clone()).ok())
+            .and_then(|res: Country| res.country)
+            .and_then(|res| res.iso_code);
     }
 }
 
@@ -102,6 +109,7 @@ impl Into<common::Device> for SDKDevice {
             ifa_tracking_enabled: Some(self.ifa_tracking_enabled),
             notification_registered: Some(self.notification_registered),
             ip_hashed_blake2: self.ip_hashed_blake2,
+            country: self.country,
 
             carrier: Some(common::Carrier {
                 name: self.carrier_name,
@@ -308,5 +316,101 @@ mod tests {
         let proto: common::Device = device.into();
 
         assert_eq!(Some(String::from("web")), proto.platform);
+    }
+
+    #[test]
+    fn test_set_real_location_ipv4() {
+        let json = json!({
+            "platform": "web"
+        });
+
+        let ip_addr: IpAddr = "109.68.226.154".parse().unwrap();
+
+        let mut device: SDKDevice = serde_json::from_value(json).unwrap();
+        device.set_location(&ip_addr);
+
+        let proto: common::Device = device.into();
+
+        assert_eq!(
+            Some(String::from("KOx83wHFu0JCTyitEEfU0+J0GWN5OxtXgMeIzDUinonr8ya0IY5VyYtrbDu8tRlBSo/a1T70lQ3uYcnSRYiR8w==")),
+            proto.ip_hashed_blake2,
+        );
+
+        assert_eq!(
+            Some(String::from("DE")),
+            proto.country
+        );
+    }
+
+    #[test]
+    fn test_set_real_location_ipv6() {
+        let json = json!({
+            "platform": "web"
+        });
+
+        let ip_addr: IpAddr = "2001:4860:4860::8844".parse().unwrap();
+
+        let mut device: SDKDevice = serde_json::from_value(json).unwrap();
+        device.set_location(&ip_addr);
+
+        let proto: common::Device = device.into();
+
+        assert_eq!(
+            Some(String::from("WlYX3LhjGXz3WRjP6V9dzs33shbfQhI+uFug7ft+W7VzzEgQPr6aMQxKn4yI7FF6MFiii+3OI2O0i9niN2Zt+g==")),
+            proto.ip_hashed_blake2,
+        );
+
+        assert_eq!(
+            Some(String::from("US")),
+            proto.country
+        );
+    }
+
+    #[test]
+    fn test_set_local_ipv4() {
+        let json = json!({
+            "platform": "web"
+        });
+
+        let ip_addr: IpAddr = "127.0.0.1".parse().unwrap();
+
+        let mut device: SDKDevice = serde_json::from_value(json).unwrap();
+        device.set_location(&ip_addr);
+
+        let proto: common::Device = device.into();
+
+        assert_eq!(
+            Some(String::from("+s8vULlRmH7/43pUpb2l4/B+olwJ9HPFLWgvsG+FJPw2qdR+UzgO1BuBGBMIQ61PjS6yHj6En9SaLUB1M6rXog==")),
+            proto.ip_hashed_blake2,
+        );
+
+        assert_eq!(
+            None,
+            proto.country
+        );
+    }
+
+    #[test]
+    fn test_set_local_ipv6() {
+        let json = json!({
+            "platform": "web"
+        });
+
+        let ip_addr: IpAddr = "::1".parse().unwrap();
+
+        let mut device: SDKDevice = serde_json::from_value(json).unwrap();
+        device.set_location(&ip_addr);
+
+        let proto: common::Device = device.into();
+
+        assert_eq!(
+            Some(String::from("iJYy4kyl+U+iXvriFVHa8S+fPnIwlSFwd6BiESUmVwpQA2/EiUZCwGRPtETJj2d89wr9svyy7S4E0Lb9mnER6w==")),
+            proto.ip_hashed_blake2,
+        );
+
+        assert_eq!(
+            None,
+            proto.country
+        );
     }
 }

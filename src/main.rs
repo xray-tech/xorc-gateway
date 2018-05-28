@@ -42,6 +42,7 @@ extern crate blake2;
 extern crate rdkafka;
 extern crate lapin_futures;
 extern crate tokio_signal;
+extern crate maxminddb;
 
 mod entity_storage;
 mod error;
@@ -79,6 +80,15 @@ thread_local! {
     pub static ENTITY_STORAGE: EntityStorage = EntityStorage::new();
     pub static KAFKA: bus::Kafka = bus::Kafka::new();
     pub static RABBITMQ: bus::RabbitMq = bus::RabbitMq::new();
+    pub static GEOIP: maxminddb::Reader =
+        match env::var("GEOIP") {
+            Ok(geoip_location) => {
+                maxminddb::Reader::open(&geoip_location).unwrap()
+            },
+            _ => {
+                maxminddb::Reader::open("./resources/GeoLite2-Country.mmdb").unwrap()
+            }
+        };
 }
 
 /// Global non-IO services that can be raced from all the threads.

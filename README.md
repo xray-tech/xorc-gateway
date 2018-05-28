@@ -47,6 +47,14 @@ must be imported to the project tree:
 > git submodule update --init
 ```
 
+To get correct country codes to the events, the system uses Maxmind's country
+code database and for the development it is possible to use the free lite
+version. By default the system expects to find the file from
+`resources/GeoLite2-Country.mmdb`, but can be changed with the `GEOIP`
+environment variable. Due licensing issues we can't provide the file with the
+repository, but it's freely available from [Maxmind's
+website](https://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz).
+
 Now it is possible to test the project without errors or warnings:
 
 ```bash
@@ -100,6 +108,7 @@ variable   | description                                                   | exa
 -----------|---------------------------------------------------------------|----------------------------------
 `CONFIG`   | The configuration file location                               | `/etc/xorc-gateway/config.toml`
 `SECRET`   | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
+`GEOIP`    | The maxmind GeoIp2 Country database mmdb location             | `./resources/GeoLite2-Country.mmdb`
 
 ### Required options
 
