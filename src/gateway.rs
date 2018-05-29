@@ -71,6 +71,14 @@ pub struct Gateway {
     connections: Arc<BusConnections>,
 }
 
+impl Clone for Gateway {
+    fn clone(&self) -> Gateway {
+        Gateway {
+            connections: self.connections.clone(),
+        }
+    }
+}
+
 type ErrorWithContext = (GatewayError, Option<Context>);
 
 impl Gateway {
@@ -138,7 +146,7 @@ impl Gateway {
             .threadpool_builder(threadpool_builder)
             .build().unwrap();
 
-        let gateway = Arc::new(Self::new());
+        let gateway = Self::new();
 
         let server = Server::bind(&addr)
             .serve(move || {
