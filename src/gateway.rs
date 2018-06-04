@@ -325,7 +325,18 @@ impl Gateway {
                         let mut payload = Vec::new();
                         proto_event.encode(&mut payload).unwrap();
 
-                        let kafka = connections.kafka.publish(&payload, &context);
+                        let kafka = connections
+                            .kafka
+                            .publish(&payload, &context)
+                            .or_else(|e| {
+                                /// This here folk's is a silencer for Kafka
+                                /// errors, which will be removed when we switch
+                                /// the actual production to the new OAM.
+                                error!("Couldn't publish to kafka: [{:?}]", e);
+
+                                ok(())
+                            });
+
                         let rabbitmq = connections.rabbitmq.publish(&payload, &context);
 
                         kafka.join(rabbitmq)
