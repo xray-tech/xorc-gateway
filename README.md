@@ -9,7 +9,7 @@ The main gateway to the XORC platform. The main routes are:
   
 ## Dependencies
 
-XORC Gateway is written with Rust and should be always be possible to compile
+XORC Gateway is written with Rust and should always be possible to compile
 with the latest stable version. The de-facto way of getting the latest Rust is
 with [rustup](https://rustup.rs/):
 
