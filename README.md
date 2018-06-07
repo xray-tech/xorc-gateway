@@ -106,6 +106,7 @@ The system is configuration is handled through a
 
 variable   | description                                                   | example
 -----------|---------------------------------------------------------------|----------------------------------
+`PORT`     | The port to listen                                            | `1337`
 `CONFIG`   | The configuration file location                               | `/etc/xorc-gateway/config.toml`
 `SECRET`   | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
 `GEOIP`    | The maxmind GeoIp2 Country database mmdb location             | `./resources/GeoLite2-Country.mmdb`
