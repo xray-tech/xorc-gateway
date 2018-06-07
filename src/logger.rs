@@ -28,8 +28,8 @@ impl GelfLogger {
             let mut logger = Logger::new(Box::new(UdpBackend::new(host)?))?;
             let mut env_logger = Logger::new(Box::new(UdpBackend::new(host)?))?;
 
-            logger.set_default_metadata(String::from("application_name"), String::from("sdk-gateway"));
-            env_logger.set_default_metadata(String::from("application_name"), String::from("sdk-gateway"));
+            logger.set_default_metadata(String::from("application_name"), String::from("xorc-gateway"));
+            env_logger.set_default_metadata(String::from("application_name"), String::from("xorc-gateway"));
 
             if let Ok(environment) = env::var("RUST_ENV") {
                 logger.set_default_metadata(

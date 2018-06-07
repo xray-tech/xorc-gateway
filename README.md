@@ -104,12 +104,15 @@ The system is configuration is handled through a
 
 ### Environment variables
 
-variable   | description                                                   | example
------------|---------------------------------------------------------------|----------------------------------
-`PORT`     | The port to listen                                            | `1337`
-`CONFIG`   | The configuration file location                               | `/etc/xorc-gateway/config.toml`
-`SECRET`   | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
-`GEOIP`    | The maxmind GeoIp2 Country database mmdb location             | `./resources/GeoLite2-Country.mmdb`
+variable    | description                                                   | example
+------------|---------------------------------------------------------------|----------------------------------
+`PORT`      | The port to listen                                            | `1337`
+`CONFIG`    | The configuration file location                               | `/etc/xorc-gateway/config.toml`
+`SECRET`    | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
+`GEOIP`     | The maxmind GeoIp2 Country database mmdb location             | `./resources/GeoLite2-Country.mmdb`
+`RUST_LOG`  | Log level, either `debug`, `info`, `warn` or `error`          | `info`
+`RUST_GELF` | If set, logs to Graylog                                       | `graylog.service.consul:12201`
+`RUST_ENV`  | `staging` or `production`                                     | `staging`
 
 ### Required options
 
