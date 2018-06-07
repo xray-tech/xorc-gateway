@@ -9,6 +9,8 @@ use std::{
     collections::HashMap,
 };
 
+use metrics::APP_UPDATE_COUNTER;
+
 use base64;
 use ring::{hmac, digest};
 use error::GatewayError;
@@ -90,7 +92,7 @@ impl AppRegistry {
         } else {
             warn!("Apps loaded form configuration file. Development only!");
 
-            let apps = CONFIG.test_apps
+            let apps = CONFIG.test_apps.as_ref().unwrap()
                 .iter()
                 .fold(HashMap::new(), |mut acc, test_app| {
                     let ios_secret = test_app
@@ -233,6 +235,8 @@ impl AppRegistry {
         web_secret: Option<String>,
     ) -> Application
     {
+        APP_UPDATE_COUNTER.inc();
+
         let ios_key = ios_secret
             .as_ref()
             .and_then(|s| Self::create_key(id, "ios_secret", &s.as_bytes()));

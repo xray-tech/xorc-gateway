@@ -1,6 +1,11 @@
 use prometheus::{CounterVec, Counter, Histogram};
 
 lazy_static! {
+    pub static ref APP_UPDATE_COUNTER: Counter = register_counter!(
+        "gateway_application_updates",
+        "Total number of application updates"
+    ).unwrap();
+
     pub static ref EVENTS_COUNTER: Counter = register_counter!(
         "events_total",
         "Total number of SDK events sent"

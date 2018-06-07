@@ -9,7 +9,7 @@ pub struct Config {
     pub gateway: GatewayConfig,
     pub cors: Option<CorsConfig>,
     pub origins: Vec<OriginConfig>,
-    pub test_apps: Vec<TestAppConfig>,
+    pub test_apps: Option<Vec<TestAppConfig>>,
     pub postgres: Option<PostgresConfig>,
     pub aerospike: AerospikeConfig,
 }

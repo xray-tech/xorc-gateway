@@ -128,7 +128,13 @@ fn main() {
     });
 
     let _ = Signal::new(SIGINT).flatten_stream().into_future().and_then(|_| {
-        server_tx.send(()).unwrap();
+        if let Err(error) = server_tx.send(()) {
+            error!(
+                "There was an error sending the server shutdown signal: [{:?}]",
+                error
+            );
+        };
+
         control.store(false, Ordering::Relaxed);
 
         for thread in threads {

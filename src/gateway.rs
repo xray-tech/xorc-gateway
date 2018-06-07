@@ -161,9 +161,9 @@ impl Gateway {
                     gw.service(req)
                 })
             })
-            .map_err(|e| println!("Critical server error, exiting: {}", e));
+            .map_err(|e| error!("Critical server error, exiting: {}", e));
 
-        println!(
+        info!(
             "Running on {} threads. Listening on http://{}",
             CONFIG.gateway.threads,
             &addr
