@@ -34,7 +34,6 @@ impl Config {
 
 #[derive(Deserialize, Debug)]
 pub struct GatewayConfig {
-    pub address: String,
     pub threads: usize,
     pub process_name_prefix: String,
     pub default_token: String,

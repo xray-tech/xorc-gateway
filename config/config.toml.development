@@ -1,5 +1,4 @@
 [gateway]
-address = "0.0.0.0:1337"
 threads = 4
 process_name_prefix = "sdk-gateway-worker-"
 default_token = "T0BdxB0O/+eRZhN6REPmbYpTqjxCTtUgirbW7ABJ8renKaxoGbHFsOX2iLFhuWaJbZHzmTnvKv15fv/87ceIQQ=="

@@ -14,6 +14,7 @@ use hyper::{
 use std::{
     net::ToSocketAddrs,
     sync::Arc,
+    env,
 };
 
 use futures::{
@@ -134,7 +135,12 @@ impl Gateway {
 
     /// Run the service, keeps running until a signal is sent through rx
     pub fn run(rx: oneshot::Receiver<()>) {
-        let mut addr_iter = CONFIG.gateway.address.to_socket_addrs().unwrap();
+        let port = match env::var("PORT") {
+            Ok(val) => val,
+            Err(_) => String::from("1337"),
+        };
+
+        let mut addr_iter = format!("0.0.0.0:{}", port).to_socket_addrs().unwrap();
         let addr = addr_iter.next().unwrap();
 
         let mut threadpool_builder = tokio_threadpool::Builder::new();
