@@ -8,6 +8,7 @@ pub enum EventStatus {
 
 #[derive(Serialize, Debug)]
 pub struct RegistrationData {
+    #[serde(skip_serializing_if = "Option::is_none")]
     api_token: Option<String>,
     device_id: Ciphertext,
 }
@@ -28,6 +29,7 @@ impl From<Vec<EventResult>> for SDKResponse {
 #[derive(Serialize, Debug)]
 pub struct EventResult {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub registration_data: Option<RegistrationData>,
     pub status: EventStatus,
 }
@@ -89,6 +91,30 @@ mod tests {
                         "device_id": "encrypted",
                         "api_token": "token"
                     },
+                }
+            ]
+        });
+
+        assert_eq!(
+            serde_json::to_string(&json_expected).unwrap(),
+            serde_json::to_string(&sdk_response).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_register_event_result_empty_registration_data() {
+        let event_result = EventResult::new(
+            "123".to_string(),
+            EventStatus::Success,
+        );
+
+        let sdk_response = SDKResponse::from(vec!(event_result));
+
+        let json_expected = json!({
+            "events_status": [
+                {
+                    "id": "123",
+                    "status": "success"
                 }
             ]
         });
