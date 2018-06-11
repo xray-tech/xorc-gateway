@@ -3,10 +3,16 @@ use rdkafka::{
     producer::FutureProducer,
 };
 
+use futures::{
+    Future,
+    future::{ok, err},
+};
+
 use error::GatewayError;
-use futures::Future;
 use context::Context;
 use ::CONFIG;
+
+use metrics::KAFKA_LATENCY_HISTOGRAM;
 
 pub struct Kafka {
     producer: FutureProducer,
@@ -33,14 +39,26 @@ impl Kafka {
         context: &Context,
     ) -> impl Future<Item=(), Error=GatewayError>
     {
-        self.producer.send_copy::<Vec<u8>, Vec<u8>>(
+        let send_event = self.producer.send_copy::<Vec<u8>, Vec<u8>>(
             CONFIG.kafka.topic.as_ref(),
             None,
             Some(payload),
             Self::routing_key(context).as_ref(),
             None,
-            1000,
-        ).map_err(|_| GatewayError::ServiceUnavailable("Could not send to Kafka")).map(|_| ())
+            1000
+        );
+
+        let timer = KAFKA_LATENCY_HISTOGRAM.start_timer();
+        send_event.then(|res| {
+            timer.observe_duration();
+
+            match res {
+                Ok(_) =>
+                    ok(()),
+                Err(_) =>
+                    err(GatewayError::ServiceUnavailable("Could not send to kafka")),
+            }
+        })
     }
 
     fn routing_key(context: &Context) -> Option<Vec<u8>> {

@@ -9,16 +9,16 @@ import base64
 import argparse
 
 app_config = {
-        "3" : { 
+        "34" : { 
             "token"          : bytearray.fromhex('46732a28cd445366c6c8dcbd57500af4e69597c8ebe224634d6ccab812275c9c'),
-            "secret_android" : bytearray.fromhex('d685e53ae50c945e5ae4f36170d7213360a25ed91b91a647574aa384d2b6f901'),
+            "secret_android" : bytearray.fromhex('1b66af517dd60807aeff8b4582d202ef500085bc0cec92bc3e67f0c58d6203b5'),
             "secret_ios"     : bytearray.fromhex('1b66af517dd60807aeff8b4582d202ef500085bc0cec92bc3e67f0c58d6203b5'),
             "secret_web"     : bytearray.fromhex('4c553960fdc2a82f90b84f6ef188e836818fcee2c43a6c32bd6c91f41772657f'),
             }
         }
 
 parser = argparse.ArgumentParser(description='SDK Gateway test script')
-parser.add_argument('--app-id', action='store', choices=['3'], required=True, help='preconfigured app-id to use')
+parser.add_argument('--app-id', action='store', choices=['34'], required=True, help='preconfigured app-id to use')
 args = parser.parse_args()
 
 app_id = args.app_id
@@ -366,19 +366,5 @@ if not device_id:
     device_id = get_device_id()
 
 print (device_id)
-send_app_open()
-send_push_token_update()
-send_push_opt_in()
-send_email_subscribe_no_email()
-send_email_subscribe_empty_email()
-send_email_subscribe_invalid_email()
-send_email_subscribe()
-send_email_confirm()
-send_email_change()
-send_email_confirm()
-send_email_unsubscribe()
-send_email_resubscribe()
-send_email_remove()
-test_reusing_same_did()
 #send_batch()
 #send_empty()

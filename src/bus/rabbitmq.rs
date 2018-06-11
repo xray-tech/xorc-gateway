@@ -18,6 +18,7 @@ use std::{
 use futures::{
     Future,
     Stream,
+    future::{ok, err},
 };
 
 use tokio_threadpool;
@@ -26,6 +27,7 @@ use context::{Context, DeviceId};
 use error::GatewayError;
 use tokio_signal::unix::{Signal, SIGINT};
 use ::CONFIG;
+use metrics::RABBITMQ_LATENCY_HISTOGRAM;
 
 static RULE_ENGINE_PARTITIONS: u32 = 256;
 
@@ -95,7 +97,7 @@ impl RabbitMq {
     {
         let routing_key = Self::routing_key(context.device_id.as_ref());
 
-        self.channel.basic_publish(
+        let send_event = self.channel.basic_publish(
             CONFIG.rabbitmq.exchange.as_ref(),
             routing_key.as_ref(),
             payload,
@@ -105,7 +107,19 @@ impl RabbitMq {
                 ..Default::default()
             },
             BasicProperties::default(),
-        ).map_err(|_| GatewayError::ServiceUnavailable("Could not send to RabbitMq")).map(|_| ())
+        );
+
+        let timer = RABBITMQ_LATENCY_HISTOGRAM.start_timer();
+        send_event.then(|res| {
+            timer.observe_duration();
+
+            match res {
+                Ok(_) =>
+                    ok(()),
+                Err(_) =>
+                    err(GatewayError::ServiceUnavailable("Could not send to rabbitmq")),
+            }
+        })
     }
 
     // Take the four first characters of the last part of the device id,

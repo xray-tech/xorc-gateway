@@ -17,8 +17,35 @@ lazy_static! {
         &["status", "endpoint"]
     ).unwrap();
 
+    pub static ref AEROSPIKE_GET_COUNTER: CounterVec = register_counter_vec!(
+        "aerospike_get_total",
+        "Total number of gets to Aerospike",
+        &["status"]
+    ).unwrap();
+
+    pub static ref AEROSPIKE_PUT_COUNTER: CounterVec = register_counter_vec!(
+        "aerospike_put_total",
+        "Total number of puts to Aerospike",
+        &["status"]
+    ).unwrap();
+
     pub static ref RESPONSE_TIMES_HISTOGRAM: Histogram = register_histogram!(
         "http_request_latency_seconds",
+        "The HTTP request latencies in seconds"
+    ).unwrap();
+
+    pub static ref KAFKA_LATENCY_HISTOGRAM: Histogram = register_histogram!(
+        "kafka_latency_seconds",
+        "The HTTP request latencies in seconds"
+    ).unwrap();
+
+    pub static ref RABBITMQ_LATENCY_HISTOGRAM: Histogram = register_histogram!(
+        "rabbitmq_latency_seconds",
+        "The HTTP request latencies in seconds"
+    ).unwrap();
+
+    pub static ref AEROSPIKE_LATENCY_HISTOGRAM: Histogram = register_histogram!(
+        "aerospike_latency_seconds",
         "The HTTP request latencies in seconds"
     ).unwrap();
 }

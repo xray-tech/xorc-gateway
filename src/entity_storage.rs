@@ -20,6 +20,12 @@ use aerospike::{
 
 use ::CONFIG;
 
+use metrics::{
+    AEROSPIKE_LATENCY_HISTOGRAM,
+    AEROSPIKE_GET_COUNTER,
+    AEROSPIKE_PUT_COUNTER
+};
+
 pub struct EntityStorage {
     namespace: String,
     client: Client
@@ -67,20 +73,30 @@ impl EntityStorage {
             {
                 let key = self.as_key(ifa, app_id);
                 let mut back_off = Duration::from_millis(1);
+                let timer = AEROSPIKE_LATENCY_HISTOGRAM.start_timer();
 
                 for _ in 0..5 {
                     match self.client.get(&ReadPolicy::default(), &key, ["entity_id"]) {
-                        Ok(record) =>
-                            return record.bins.get("entity_id").map(|v| v.as_string()),
-                        Err(Error(ErrorKind::ServerError(ResultCode::KeyNotFoundError), _)) =>
-                            return None,
+                        Ok(record) => {
+                            timer.observe_duration();
+                            AEROSPIKE_GET_COUNTER.with_label_values(&["ok"]).inc();
+                            return record.bins.get("entity_id").map(|v| v.as_string())
+                        }
+                        Err(Error(ErrorKind::ServerError(ResultCode::KeyNotFoundError), _)) => {
+                            timer.observe_duration();
+                            AEROSPIKE_GET_COUNTER.with_label_values(&["not_found"]).inc();
+                            return None
+                        }
                         Err(e) => {
+                            AEROSPIKE_GET_COUNTER.with_label_values(&["error"]).inc();
                             warn!("Error reading known ifa, retrying: [{:?}]", e);
                             thread::park_timeout(back_off);
                             back_off += Duration::from_millis(1);
                         }
                     }
                 }
+
+                timer.observe_duration();
 
                 error!("Could not read known ifa.");
 
@@ -110,18 +126,25 @@ impl EntityStorage {
 
                 let key = self.as_key(ifa, app_id);
                 let mut back_off = Duration::from_millis(1);
+                let timer = AEROSPIKE_LATENCY_HISTOGRAM.start_timer();
 
                 for _ in 0..5 {
                     match self.client.put(&WritePolicy::default(), &key, &[&bin]) {
-                        Ok(_) =>
-                            return Ok(()),
+                        Ok(_) => {
+                            timer.observe_duration();
+                            AEROSPIKE_PUT_COUNTER.with_label_values(&["ok"]).inc();
+                            return Ok(())
+                        },
                         Err(e) => {
+                            AEROSPIKE_PUT_COUNTER.with_label_values(&["error"]).inc();
                             warn!("Error serializing known ifa, retrying: [{:?}]", e);
                             thread::park_timeout(back_off);
                             back_off += Duration::from_millis(1);
                         }
                     }
                 }
+
+                timer.observe_duration();
 
                 panic!("Could not write known ifa. Aborting!")
             },
