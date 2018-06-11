@@ -379,15 +379,12 @@ impl Gateway {
             .or_else(|_| err((GatewayError::InternalServerError("body concat"), None)))
             .and_then(move |body| {
                 if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
-                    let event_handling =
-                        Self::handle_event(
-                            body.to_vec(),
-                            event,
-                            headers,
-                            connections
-                        );
-
-                    Either::A(event_handling)
+                    Either::A(Self::handle_event(
+                        body.to_vec(),
+                        event,
+                        headers,
+                        connections
+                    ))
                 } else {
                     Either::B(err((GatewayError::InvalidPayload, None)))
                 }
@@ -407,6 +404,11 @@ impl Gateway {
                             } else {
                                 Response::builder()
                             };
+
+                        builder.header(
+                            header::CONTENT_TYPE,
+                            "application/json"
+                        );
 
                         builder.status(StatusCode::OK);
                         ok(builder.body(json_body.into()).unwrap())
