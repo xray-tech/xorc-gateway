@@ -94,9 +94,9 @@ impl Gateway {
 
     /// ROUTES
     ///
-    /// - OPTIONS to /     :: for CORS/web-push
-    /// - POST to /        :: SDK Events, sent to kafka/rmq
-    /// - GET to /watchdog :: Prometheus metrics
+    /// - OPTIONS to /xray/events/360dialog/sdk/v1 :: for CORS/web-push
+    /// - POST to /xray/events/360dialog/sdk/v1    :: SDK Events, sent to kafka/rmq
+    /// - GET to /watchdog                         :: Prometheus metrics
     fn service(
         &self,
         req: Request<Body>,
@@ -104,11 +104,11 @@ impl Gateway {
     {
         match (req.method(), req.uri().path()) {
             // SDK OPTIONS request
-            (&Method::OPTIONS, "/") => {
+            (&Method::OPTIONS, "/xray/events/360dialog/sdk/v1") => {
                 Box::new(Self::handle_options())
             },
             // SDK events main path
-            (&Method::POST, "/") => {
+            (&Method::POST, "/xray/events/360dialog/sdk/v1") => {
                 let timer = RESPONSE_TIMES_HISTOGRAM.start_timer();
 
                 Box::new(Self::handle_sdk(req, self.connections.clone()).then(|response| {
