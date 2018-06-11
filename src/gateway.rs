@@ -391,9 +391,7 @@ impl Gateway {
             })
             .then(move |res| {
                 match res {
-                    Ok((sdk_response, context)) => {
-                        let json_body = serde_json::to_vec(&sdk_response).unwrap();
-
+                    Ok((json_body, context)) => {
                         let mut builder =
                             if let Some(ref cors) = *CORS {
                                 cors.response_builder_origin(
