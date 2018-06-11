@@ -296,7 +296,7 @@ impl Gateway {
     /// SDK event handling is here
     fn handle_event(
         body: Vec<u8>,
-        mut event: SDKEventBatch,
+        event: SDKEventBatch,
         headers: HeaderMap,
         connections: Arc<BusConnections>
     ) -> impl Future<Item=(String, Context), Error=ErrorWithContext> + 'static + Send
@@ -320,13 +320,11 @@ impl Gateway {
 
         match APP_REGISTRY.validate(&event, &context, &body) {
             Ok(()) => {
-                if let Some(ref ip) = context.ip { event.device.set_location(ip) }
-
                 let response = Self::generate_event_results(context, event)
                     .map_err(|e| (e, None))
                     .and_then(move |(results, context, event)| {
                         let proto_event: output::events::SdkEventBatch =
-                            event.into();
+                            event.into_proto(&context);
 
                         let mut payload = Vec::new();
                         proto_event.encode(&mut payload).unwrap();
