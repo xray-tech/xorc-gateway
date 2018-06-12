@@ -10,7 +10,7 @@ http = "0.1"
 log = "0.4"
 env_logger = "0.5"
 lazy_static = "1.0"
-gelf = "0.2"
+gelf = { git = "https://github.com/pimeys/gelf-rust.git", branch = "borrowing_message_interface" }
 pretty_env_logger = "0.2"
 ring = "0.12"
 serde = "1.0"
