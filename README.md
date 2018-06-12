@@ -4,7 +4,7 @@ The main gateway to the XORC platform. The main routes are:
 
 - `OPTIONS` to `/`: For Javascript clients to get the CORS headers.
 - `POST` to `/`: To send events for the XORC OAM.
-- `GET` to `/watchdog`: If the endpoint answers, the service works. Prints
+- `GET` to `/metrics`: If the endpoint answers, the service works. Prints
   metrics in Prometheus' format.
   
 ## Dependencies

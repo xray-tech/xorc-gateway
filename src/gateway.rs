@@ -96,7 +96,7 @@ impl Gateway {
     ///
     /// - OPTIONS to /xray/events/360dialog/sdk/v1 :: for CORS/web-push
     /// - POST to /xray/events/360dialog/sdk/v1    :: SDK Events, sent to kafka/rmq
-    /// - GET to /watchdog                         :: Prometheus metrics
+    /// - GET to /metrics                          :: Prometheus metrics
     fn service(
         &self,
         req: Request<Body>,
@@ -105,6 +105,11 @@ impl Gateway {
         match (req.method(), req.uri().path()) {
             // SDK OPTIONS request
             (&Method::OPTIONS, "/xray/events/360dialog/sdk/v1") => {
+                REQUEST_COUNTER.with_label_values(&[
+                    "200",
+                    "options",
+                ]).inc();
+
                 Box::new(Self::handle_options())
             },
             // SDK events main path
@@ -117,7 +122,7 @@ impl Gateway {
                 }))
             },
             // Prometheus metrics
-            (&Method::GET, "/watchdog") => {
+            (&Method::GET, "/metrics") => {
                 Box::new(Self::handle_metrics())
             },
             _ => {
@@ -405,6 +410,11 @@ impl Gateway {
                             header::CONTENT_TYPE,
                             "application/json"
                         );
+
+                        REQUEST_COUNTER.with_label_values(&[
+                            "200",
+                            "sdk_events",
+                        ]).inc();
 
                         builder.status(StatusCode::OK);
                         ok(builder.body(json_body.into()).unwrap())
