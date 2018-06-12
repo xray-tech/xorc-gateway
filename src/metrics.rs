@@ -31,21 +31,33 @@ lazy_static! {
 
     pub static ref RESPONSE_TIMES_HISTOGRAM: Histogram = register_histogram!(
         "http_request_latency_seconds",
-        "The HTTP request latencies in seconds"
+        "The HTTP request latencies in seconds",
+        vec![0.00005, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007,
+             0.0008, 0.0009, 0.001, 0.002, 0.003, 0.005, 0.007, 0.01, 0.05,
+             0.075, 1.0, 2.0, 4.0, 5.0, 10.0]
     ).unwrap();
 
     pub static ref KAFKA_LATENCY_HISTOGRAM: Histogram = register_histogram!(
         "kafka_latency_seconds",
-        "The HTTP request latencies in seconds"
+        "The HTTP request latencies in seconds",
+        vec![0.00005, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007,
+             0.0008, 0.0009, 0.001, 0.002, 0.003, 0.005, 0.007, 0.01, 0.05,
+             0.075, 1.0, 2.0, 4.0, 5.0, 10.0]
     ).unwrap();
 
     pub static ref RABBITMQ_LATENCY_HISTOGRAM: Histogram = register_histogram!(
         "rabbitmq_latency_seconds",
-        "The HTTP request latencies in seconds"
+        "The HTTP request latencies in seconds",
+        vec![0.00005, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007,
+             0.0008, 0.0009, 0.001, 0.002, 0.003, 0.005, 0.007, 0.01, 0.05,
+             0.075, 1.0, 2.0, 4.0, 5.0, 10.0]
     ).unwrap();
 
     pub static ref AEROSPIKE_LATENCY_HISTOGRAM: Histogram = register_histogram!(
         "aerospike_latency_seconds",
-        "The HTTP request latencies in seconds"
+        "The HTTP request latencies in seconds",
+        vec![0.00005, 0.0001, 0.0002, 0.0003, 0.0004, 0.0005, 0.0006, 0.0007,
+             0.0008, 0.0009, 0.001, 0.002, 0.003, 0.005, 0.007, 0.01, 0.05,
+             0.075, 1.0, 2.0, 4.0, 5.0, 10.0]
     ).unwrap();
 }
