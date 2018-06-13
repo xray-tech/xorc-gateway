@@ -17,16 +17,10 @@ lazy_static! {
         &["status", "endpoint"]
     ).unwrap();
 
-    pub static ref AEROSPIKE_GET_COUNTER: CounterVec = register_counter_vec!(
-        "aerospike_get_total",
+    pub static ref AEROSPIKE_REQUEST_COUNTER: CounterVec = register_counter_vec!(
+        "aerospike_requests_total",
         "Total number of gets to Aerospike",
-        &["status"]
-    ).unwrap();
-
-    pub static ref AEROSPIKE_PUT_COUNTER: CounterVec = register_counter_vec!(
-        "aerospike_put_total",
-        "Total number of puts to Aerospike",
-        &["status"]
+        &["method", "status"]
     ).unwrap();
 
     pub static ref RESPONSE_TIMES_HISTOGRAM: Histogram = register_histogram!(

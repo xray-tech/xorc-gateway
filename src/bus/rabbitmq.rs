@@ -63,7 +63,7 @@ impl RabbitMq {
         let stream = TcpStream::connect(&address).wait().unwrap();
 
         let (client, heartbeat) =
-            Client::connect(stream, &connection_options).wait().unwrap();
+            Client::connect(stream, connection_options).wait().unwrap();
 
         let handle =
             thread::spawn(move || {
@@ -101,7 +101,7 @@ impl RabbitMq {
             CONFIG.rabbitmq.exchange.as_ref(),
             routing_key.as_ref(),
             payload,
-            &BasicPublishOptions {
+            BasicPublishOptions {
                 mandatory: false,
                 immediate: false,
                 ..Default::default()

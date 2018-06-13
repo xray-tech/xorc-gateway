@@ -161,11 +161,25 @@ impl GelfLogger {
         context: &Option<Context>
     ) -> Result<(), Error>
     {
-        let mut msg = Message::new(title.to_string());
+        let mut msg = Message::new(title);
         msg.set_level(level);
 
         if let Some(ref context) = context {
-            self.add_context(&mut msg, context)?;
+            msg.set_metadata("app_id", context.app_id.as_ref())?;
+            msg.set_metadata("platform", format!("{:?}", context.platform))?;
+
+            if let Some(ref api_token) = context.api_token {
+                msg.set_metadata("api_token", api_token.as_ref())?;
+            };
+
+            if let Some(ref device_id) = context.device_id {
+                msg.set_metadata("encrypted_device_id", device_id.ciphertext.as_ref())?;
+                msg.set_metadata("device_id", device_id.cleartext.as_ref())?;
+            }
+
+            if let Some(ref signature) = context.signature {
+                msg.set_metadata("signature", format!("{}", signature))?;
+            };
         }
 
         self.log_message(msg);
@@ -179,39 +193,39 @@ impl GelfLogger {
         level: Level,
     )
     {
-        let mut msg = Message::new(title.to_string());
+        let mut msg = Message::new(title);
         msg.set_level(level);
         self.log_message(msg);
     }
 
     pub fn log_app_update(&self, app: &Application) -> Result<(), Error> {
-        let mut msg = Message::new("Application data update".to_string());
+        let mut msg = Message::new("Application data update");
         msg.set_level(Level::Informational);
 
         msg.set_metadata("app_id", format!("{}", app.id))?;
 
         if app.token.is_some() {
-            msg.set_metadata("has_token", "true".to_string())?;
+            msg.set_metadata("has_token", "true")?;
         } else {
-            msg.set_metadata("has_token", "false".to_string())?;
+            msg.set_metadata("has_token", "false")?;
         }
 
         if app.ios_secret.is_some() {
-            msg.set_metadata("ios_enabled", "true".to_string())?;
+            msg.set_metadata("ios_enabled", "true")?;
         } else {
-            msg.set_metadata("ios_enabled", "false".to_string())?;
+            msg.set_metadata("ios_enabled", "false")?;
         }
 
         if app.android_secret.is_some() {
-            msg.set_metadata("android_enabled", "true".to_string())?;
+            msg.set_metadata("android_enabled", "true")?;
         } else {
-            msg.set_metadata("android_enabled", "false".to_string())?;
+            msg.set_metadata("android_enabled", "false")?;
         }
 
         if app.web_secret.is_some() {
-            msg.set_metadata("web_enabled", "true".to_string())?;
+            msg.set_metadata("web_enabled", "true")?;
         } else {
-            msg.set_metadata("web_enabled", "false".to_string())?;
+            msg.set_metadata("web_enabled", "false")?;
         }
 
         self.log_message(msg);
@@ -243,31 +257,5 @@ impl GelfLogger {
                 }
             }
         }
-    }
-
-    fn add_context(
-        &self,
-        msg: &mut Message,
-        context: &Context
-    ) -> Result<(), Error>
-    {
-        if let Some(ref api_token) = context.api_token {
-            msg.set_metadata("api_token", format!("{}", api_token))?;
-        };
-
-        if let Some(ref device_id) = context.device_id {
-            msg.set_metadata("encrypted_device_id", format!("{}", device_id.ciphertext))?;
-            msg.set_metadata("device_id", format!("{}", device_id.cleartext))?;
-        }
-
-        if let Some(ref signature) = context.signature {
-            msg.set_metadata("signature", format!("{}", signature))?;
-        };
-
-        if let Some(ref ip) = context.ip {
-            msg.set_metadata("ip", format!("{}", ip))?;
-        };
-
-        Ok(())
     }
 }

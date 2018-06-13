@@ -22,8 +22,7 @@ use ::CONFIG;
 
 use metrics::{
     AEROSPIKE_LATENCY_HISTOGRAM,
-    AEROSPIKE_GET_COUNTER,
-    AEROSPIKE_PUT_COUNTER
+    AEROSPIKE_REQUEST_COUNTER,
 };
 
 pub struct EntityStorage {
@@ -79,16 +78,16 @@ impl EntityStorage {
                     match self.client.get(&ReadPolicy::default(), &key, ["entity_id"]) {
                         Ok(record) => {
                             timer.observe_duration();
-                            AEROSPIKE_GET_COUNTER.with_label_values(&["ok"]).inc();
+                            AEROSPIKE_REQUEST_COUNTER.with_label_values(&["get", "ok"]).inc();
                             return record.bins.get("entity_id").map(|v| v.as_string())
                         }
                         Err(Error(ErrorKind::ServerError(ResultCode::KeyNotFoundError), _)) => {
                             timer.observe_duration();
-                            AEROSPIKE_GET_COUNTER.with_label_values(&["not_found"]).inc();
+                            AEROSPIKE_REQUEST_COUNTER.with_label_values(&["get", "not_found"]).inc();
                             return None
                         }
                         Err(e) => {
-                            AEROSPIKE_GET_COUNTER.with_label_values(&["error"]).inc();
+                            AEROSPIKE_REQUEST_COUNTER.with_label_values(&["get", "error"]).inc();
                             warn!("Error reading known ifa, retrying: [{:?}]", e);
                             thread::park_timeout(back_off);
                             back_off += Duration::from_millis(1);
@@ -132,11 +131,11 @@ impl EntityStorage {
                     match self.client.put(&WritePolicy::default(), &key, &[&bin]) {
                         Ok(_) => {
                             timer.observe_duration();
-                            AEROSPIKE_PUT_COUNTER.with_label_values(&["ok"]).inc();
+                            AEROSPIKE_REQUEST_COUNTER.with_label_values(&["put", "ok"]).inc();
                             return Ok(())
                         },
                         Err(e) => {
-                            AEROSPIKE_PUT_COUNTER.with_label_values(&["error"]).inc();
+                            AEROSPIKE_REQUEST_COUNTER.with_label_values(&["put", "error"]).inc();
                             warn!("Error serializing known ifa, retrying: [{:?}]", e);
                             thread::park_timeout(back_off);
                             back_off += Duration::from_millis(1);
