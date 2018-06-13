@@ -25,6 +25,7 @@ impl Kafka {
         let producer = ClientConfig::new()
             .set("bootstrap.servers", &CONFIG.kafka.brokers)
             .set("produce.offset.report", "true")
+            .set("request.required.acks", "0")
             .create()
             .expect("Producer creation error");
 
