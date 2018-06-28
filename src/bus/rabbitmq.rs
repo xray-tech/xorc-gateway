@@ -91,7 +91,7 @@ impl RabbitMq {
 
     pub fn publish(
         &self,
-        payload: &Vec<u8>,
+        payload: Vec<u8>,
         context: &Context,
     ) -> impl Future<Item=(), Error=GatewayError>
     {

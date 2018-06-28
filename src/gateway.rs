@@ -346,7 +346,7 @@ impl Gateway {
                                 ok(())
                             });
 
-                        let rabbitmq = connections.rabbitmq.publish(&payload, &context);
+                        let rabbitmq = connections.rabbitmq.publish(payload, &context);
 
                         kafka.join(rabbitmq)
                             .or_else(|e| { err((e, None)) })
