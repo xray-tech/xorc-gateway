@@ -1,6 +1,9 @@
 use rdkafka::{
     config::ClientConfig,
-    producer::FutureProducer,
+    producer::{
+        FutureProducer,
+        future_producer::FutureRecord,
+    },
 };
 
 use futures::{
@@ -40,17 +43,19 @@ impl Kafka {
         context: &Context,
     ) -> impl Future<Item=(), Error=GatewayError>
     {
-        let send_event = self.producer.send_copy::<Vec<u8>, Vec<u8>>(
-            CONFIG.kafka.topic.as_ref(),
-            None,
-            Some(payload),
-            Self::routing_key(context).as_ref(),
-            None,
-            1000
-        );
+        let routing_key = Self::routing_key(context);
+        let record: FutureRecord<Vec<u8>, Vec<u8>> = FutureRecord {
+            topic: CONFIG.kafka.topic.as_ref(),
+            partition: None,
+            payload: Some(payload),
+            key: routing_key.as_ref(),
+            timestamp: None,
+            headers: None,
+        };
 
         let timer = KAFKA_LATENCY_HISTOGRAM.start_timer();
-        send_event.then(|res| {
+
+        self.producer.send(record, 1000).then(|res| {
             timer.observe_duration();
 
             match res {
