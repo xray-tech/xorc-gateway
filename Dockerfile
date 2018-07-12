@@ -31,6 +31,7 @@ RUN chmod a+x /bin/xorc-gateway
 RUN rm -rf /usr/src/xorc-gateway
 
 ENV CONFIG "/etc/xorc-gateway/config.toml"
+ENV GEOIP "/etc/xorc-gateway/GeoLite2-Country.mmdb"
 
 WORKDIR /
 
