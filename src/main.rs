@@ -10,12 +10,9 @@ extern crate serde_json;
 #[macro_use]
 extern crate prost_derive;
 #[macro_use]
-extern crate indoc;
-#[macro_use]
-extern crate aerospike;
-#[macro_use]
 extern crate prometheus;
 
+extern crate cdrs;
 extern crate hex;
 extern crate crossbeam;
 extern crate hyper;
@@ -36,15 +33,12 @@ extern crate http;
 extern crate tokio;
 extern crate tokio_threadpool;
 extern crate r2d2;
-extern crate r2d2_postgres;
-extern crate postgres;
 extern crate blake2;
 extern crate rdkafka;
-extern crate lapin_futures;
 extern crate tokio_signal;
 extern crate maxminddb;
 
-mod entity_storage;
+mod ifa_matching;
 mod error;
 mod context;
 mod events;
@@ -58,7 +52,7 @@ mod bus;
 mod metrics;
 
 use gateway::Gateway;
-use entity_storage::EntityStorage;
+use ifa_matching::IfaMatching;
 use app_registry::AppRegistry;
 use config::Config;
 use futures::{sync::oneshot, Future, Stream};
@@ -86,7 +80,7 @@ lazy_static! {
             }
         };
 
-    pub static ref ENTITY_STORAGE: EntityStorage = EntityStorage::new();
+    pub static ref IFA_MATCHING: IfaMatching = IfaMatching::new();
     pub static ref GLOG: logger::GelfLogger =
         logger::GelfLogger::new().unwrap();
 
