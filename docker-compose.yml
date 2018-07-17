@@ -1,13 +1,9 @@
 version: '2'
 services:
-  rabbitmq:
-    build: docker/rabbitmq
+  scylladb:
+    image: scylladb/scylla
     ports:
-      - "5672:5672"
-  aerospike:
-    build: docker/aerospike
-    ports:
-      - "3000:3000"
+      - "9042:9042"
   zookeeper:
     image: wurstmeister/zookeeper
     ports:
@@ -22,11 +18,3 @@ services:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_ADVERTISED_HOST_NAME: "localhost"
       KAFKA_CREATE_TOPICS: "test.rule-engine.sdk-events:1:1"
-  postgres:
-    image: postgres:9.5.4
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_PASSWORD: kulli
-      POSTGRES_USER: root
-      POSTGRES_DB: crm

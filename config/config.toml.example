@@ -13,11 +13,11 @@ allowed_methods = "POST,OPTIONS"
 allowed_headers = "Content-Type, Content-Length, X-Real-IP, D360-Signature, D360-Device-Id, D360-Api-Token"
 
 [[origins]]
-app_id = 52
+app_id = "00000000-0000-0000-0000-000000000000"
 allowed = ["https://www.hrs.de"]
 
 [[origins]]
-app_id = 163
+app_id = "11111111-0000-0000-0000-000000000000"
 allowed = ["http://localhost:5401", "https://qsphere.de", "http://not-secure.qsphere.de", "http://dev1.qsphere.de", "http://dev2.qsphere.de", "http://dev3.qsphere.de", "http://dev4.qsphere.de"]
 
 [[origins]]
@@ -25,17 +25,17 @@ app_id = 174
 allowed = ["https://anreizstruktur.github.io"]
 
 [[origins]]
-app_id = 179
+app_id = "22222222-0000-0000-0000-000000000000"
 allowed = ["https://megadeal.telekom-dienste.de", "https://td-megadeal.i22hosting.de"]
 
 [[origins]]
-app_id = 180
+app_id = "33333333-0000-0000-0000-000000000000"
 allowed = ["https://megadeal.telekom-dienste.de", "https://td-megadeal.i22hosting.de", "https://td-megadeal-staging.i22hosting.de"]
 
 [[origins]]
-app_id = 181
+app_id = "44444444-0000-0000-0000-000000000000"
 allowed = ["https://www.360dialog.com", "https://rt.360dialog.io"]
 
 [[origins]]
-app_id = 185
+app_id = "55555555-0000-0000-0000-000000000000"
 allowed = ["https://www.gelbeseiten.de", "https://rt.360dialog.io"]

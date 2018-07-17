@@ -150,7 +150,7 @@ mod tests {
         let cors = Cors::new().unwrap();
 
         let response = cors.response_builder_origin(
-            "2",
+            "11111111-0000-0000-0000-000000000000",
             Some("https://reddit.com"),
             &Platform::Web
         ).body("").unwrap();
