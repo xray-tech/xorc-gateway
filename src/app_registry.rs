@@ -61,7 +61,7 @@ impl AppRegistry {
     pub fn new() -> AppRegistry {
         if CONFIG.cassandra.manage_apps {
             let config = &CONFIG.cassandra;
-            info!("Apps loaded from ScyllaDB.");
+            info!(*GLOG, "Apps loaded from ScyllaDB.");
 
             let cluster = config
                 .contact_points
@@ -92,7 +92,7 @@ impl AppRegistry {
 
             registry
         } else {
-            warn!("Apps loaded form configuration file. Development only!");
+            warn!(*GLOG, "Apps loaded form configuration file. Development only!");
 
             let apps = CONFIG.test_apps.as_ref().unwrap()
                 .iter()
@@ -166,12 +166,12 @@ impl AppRegistry {
         }
 
         if event.events.len() == 0 {
-            warn!("Received a request without any events in it!");
+            warn!(*GLOG, "Received a request without any events in it!");
             return Err(GatewayError::InvalidPayload)
         }
 
         if self.allow_empty_signature {
-            warn!("Skipped signature checks because of configuration. Use only on development!");
+            warn!(*GLOG, "Skipped signature checks because of configuration. Use only on development!");
             return Ok(())
         }
 
@@ -199,6 +199,7 @@ impl AppRegistry {
         while control.load(Ordering::Relaxed) {
             if let Err(e) = self.update_apps() {
                 error!(
+                    *GLOG,
                     "Error updating application data from PostgreSQL, ignoring: [{:?}]",
                     e
                 );
@@ -220,6 +221,7 @@ impl AppRegistry {
             ))
         }).or_else(|e| {
             error!(
+                *GLOG,
                 "Error converting {} for app {}",
                 column,
                 app_id,
@@ -309,7 +311,6 @@ impl AppRegistry {
                         web_secret,
                     );
 
-                    let _ = GLOG.log_app_update(&app);
                     acc.insert(id_string, app);
 
                     acc
@@ -317,11 +318,11 @@ impl AppRegistry {
 
                 self.swap_apps(apps);
             } else {
-                warn!("No apps found, no access to gateway!");
+                warn!(*GLOG, "No apps found, no access to gateway!");
                 self.swap_apps(HashMap::new());
             }
         } else {
-            warn!("No ScyllaDB connection defined, registry update dysfunctional");
+            warn!(*GLOG, "No ScyllaDB connection defined, registry update dysfunctional");
         }
 
         Ok(())

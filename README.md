@@ -86,7 +86,7 @@ Configuration to use these local services is in `config/config.toml.development`
 so to start XORC gateway with it, including logging and stacktraces:
 
 ```bash
-> env RUST_STACKTRACE=1 RUST_LOG=info CONFIG=config/config.toml.development cargo run
+> env RUST_STACKTRACE=1 CONFIG=config/config.toml.development cargo run
 ```
 
 ## Configuration
@@ -102,8 +102,7 @@ variable    | description                                                   | ex
 `CONFIG`    | The configuration file location                               | `/etc/xorc-gateway/config.toml`
 `SECRET`    | The server secret for encrypting and decrypting the device id | `<<URL_SAFE_BASE64_DATA_NO_PAD>>`
 `GEOIP`     | The maxmind GeoIp2 Country database mmdb location             | `./resources/GeoLite2-Country.mmdb`
-`RUST_LOG`  | Log level, either `debug`, `info`, `warn` or `error`          | `info`
-`RUST_GELF` | If set, logs to Graylog                                       | `graylog.service.consul:12201`
+`LOG_FORMAT` | STDOUT log format, `json` or `text`. Default: `text`          | `text`
 `RUST_ENV`  | `staging` or `production`                                     | `staging`
 
 ### Required options

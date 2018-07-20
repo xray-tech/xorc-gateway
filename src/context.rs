@@ -1,3 +1,4 @@
+use slog::{self, KV, Record, Serializer};
 use uuid::Uuid;
 use hyper::HeaderMap;
 use rand::{RngCore, thread_rng};
@@ -22,7 +23,6 @@ pub struct DeviceId {
     pub ciphertext: Ciphertext,
     pub cleartext: Cleartext,
 }
-
 
 impl DeviceId {
     pub fn generate() -> DeviceId {
@@ -107,6 +107,32 @@ impl Context {
             .get(key)
             .and_then(|h| h.to_str().ok())
             .map(|s| String::from(s))
+    }
+}
+
+impl KV for Context {
+    fn serialize(&self, _record: &Record, serializer: &mut Serializer) -> slog::Result {
+        serializer.emit_str("app_id", &self.app_id)?;
+        serializer.emit_str("platform", &String::from(&self.platform))?;
+
+        if let Some(ref api_token) = self.api_token {
+            serializer.emit_str("api_token", api_token)?;
+        }
+
+        if let Some(ref device_id) = self.device_id {
+            serializer.emit_str("device_id", device_id.cleartext.as_ref())?;
+            serializer.emit_str("encrypted_device_id", device_id.ciphertext.as_ref())?;
+        }
+
+        if let Some(ref signature) = self.signature {
+            serializer.emit_str("signature", signature)?;
+        }
+
+        if let Some(ref origin) = self.origin {
+            serializer.emit_str("origin", origin)?;
+        }
+
+        Ok(())
     }
 }
 

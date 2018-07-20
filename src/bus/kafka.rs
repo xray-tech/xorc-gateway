@@ -13,7 +13,7 @@ use futures::{
 
 use error::GatewayError;
 use context::Context;
-use ::CONFIG;
+use ::{CONFIG, GLOG};
 
 use metrics::KAFKA_LATENCY_HISTOGRAM;
 
@@ -23,7 +23,7 @@ pub struct Kafka {
 
 impl Kafka {
     pub fn new() -> Kafka {
-        info!("Connecting to Kafka...");
+        info!(*GLOG, "Connecting to Kafka...");
 
         let producer = ClientConfig::new()
             .set("bootstrap.servers", &CONFIG.kafka.brokers)

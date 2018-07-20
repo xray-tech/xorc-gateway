@@ -18,6 +18,8 @@ use std::{
 
 use serde::de::{self, Deserialize, Deserializer};
 
+use ::GLOG;
+
 #[derive(Deserialize, Debug)]
 pub struct SDKEvent
 {
@@ -126,7 +128,7 @@ impl SDKEvent
                     Self::flatten_properties(&prefix, map, &mut container);
                 },
                 other => {
-                    warn!("JSON object of type {:?} not supported", other);
+                    warn!(*GLOG, "JSON object of type {:?} not supported", other);
                 }
             };
         }
