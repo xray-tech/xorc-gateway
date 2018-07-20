@@ -60,12 +60,11 @@ use ::{
     APP_REGISTRY,
     CORS,
     CONFIG,
-    ENTITY_STORAGE,
+    IFA_MATCHING,
 };
 
 struct BusConnections {
     pub kafka: bus::Kafka,
-    pub rabbitmq: bus::RabbitMq,
 }
 
 pub struct Gateway {
@@ -86,7 +85,6 @@ impl Gateway {
     fn new() -> Gateway {
         let connections = Arc::new(BusConnections {
             kafka: bus::Kafka::new(),
-            rabbitmq: bus::RabbitMq::new(),
         });
 
         Gateway { connections }
@@ -229,7 +227,7 @@ impl Gateway {
                 let tracking_enabled = event.device.ifa_tracking_enabled;
 
                 let get_id = lazy(move || poll_fn(move || blocking(|| {
-                    let device_id = ENTITY_STORAGE
+                    let device_id = IFA_MATCHING
                         .get_id_for_ifa(&app_id, &ifa, tracking_enabled)
                         .map(move |device_id| {
                             let cleartext = Cleartext::from(device_id);
@@ -240,7 +238,7 @@ impl Gateway {
                             DeviceId::generate()
                         });
 
-                    let _ = ENTITY_STORAGE.put_id_for_ifa(
+                    let _ = IFA_MATCHING.put_id_for_ifa(
                         &app_id,
                         &device_id.cleartext,
                         &ifa,
@@ -334,21 +332,9 @@ impl Gateway {
                         let mut payload = Vec::new();
                         proto_event.encode(&mut payload).unwrap();
 
-                        let kafka = connections
+                        connections
                             .kafka
                             .publish(&payload, &context)
-                            .or_else(|e| {
-                                /// This here folk's is a silencer for Kafka
-                                /// errors, which will be removed when we switch
-                                /// the actual production to the new OAM.
-                                error!("Couldn't publish to kafka: [{:?}]", e);
-
-                                ok(())
-                            });
-
-                        let rabbitmq = connections.rabbitmq.publish(payload, &context);
-
-                        kafka.join(rabbitmq)
                             .or_else(|e| { err((e, None)) })
                             .map(move |_| {
                                 EVENTS_COUNTER.inc_by(results.len() as f64);
