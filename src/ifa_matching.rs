@@ -1,12 +1,8 @@
 use encryption::Cleartext;
 use uuid::Uuid;
 use r2d2;
-
+use std::io;
 use ::CONFIG;
-
-use std::{
-    io
-};
 
 use cdrs::{
     authenticators::NoneAuthenticator,
@@ -14,7 +10,7 @@ use cdrs::{
     query::{QueryBuilder, Query},
     frame::Frame,
     transport::TransportTcp,
-    types::{value::Value, ByName},
+    types::ByName,
     cluster::{LoadBalancingStrategy, LoadBalancer, ClusterConnectionManager},
 };
 

@@ -2,8 +2,8 @@
 
 The main gateway to the XORC platform. The main routes are:
 
-- `OPTIONS` to `/`: For Javascript clients to get the CORS headers.
-- `POST` to `/`: To send events for the XORC OAM.
+- `OPTIONS` to `/xray/events/360dialog/sdk/v1`: For Javascript clients to get the CORS headers.
+- `POST` to `/xray/events/360dialog/sdk/v1`: To send events for the XORC OAM.
 - `GET` to `/metrics`: If the endpoint answers, the service works. Prints
   metrics in Prometheus' format.
   
@@ -23,9 +23,9 @@ To check that everything works:
 
 ```bash
 > rustc --version
-rustc 1.26.0 (a77568041 2018-05-07)
+rustc 1.XY.Z (111111111 1984-02-05)
 > cargo --version
-cargo 1.26.0 (0e7c5a931 2018-04-06)
+cargo 1.XY.Z (111111111 1984-02-05)
 ```
 
 Some of the crates used in the project have dependencies to certain system
@@ -82,7 +82,7 @@ To run the services:
 > docker-compose up
 ```
 
-Configuration to use these local services is in `config/config.toml.developemt`,
+Configuration to use these local services is in `config/config.toml.development`,
 so to start XORC gateway with it, including logging and stacktraces:
 
 ```bash
@@ -108,23 +108,18 @@ variable    | description                                                   | ex
 
 ### Required options
 
-section       | key                     | description                                                 | example
---------------|-------------------------|-------------------------------------------------------------|------------------------
+section       | key                       | description                                                 | example
+--------------|---------------------------|-------------------------------------------------------------|------------------------
 `[gateway]`   | `address`                 | The IP and port the server listens to                       | `"0.0.0.0:1337"`
 `[gateway]`   | `threads`                 | Number of worker threads for the server                     | `4`
-`[gateway]`   | `process_name_prefix`   | The prefix how worker threads are named in the process list | `"sdk-gateway-worker-"`
-`[gateway]`   | `default_token`          | Base64 encoded token used if app does not have one set      | `"<<HEXSTRING_DATA>>"`
-`[gateway]`   | `allow_empty_signature` | If true, system doesn't require a signed payload            | `false`
+`[gateway]`   | `process_name_prefix`     | The prefix how worker threads are named in the process list | `"sdk-gateway-worker-"`
+`[gateway]`   | `default_token`           | Base64 encoded token used if app does not have one set      | `"<<HEXSTRING_DATA>>"`
+`[gateway]`   | `allow_empty_signature`   | If true, system doesn't require a signed payload            | `false`
 `[kafka]`     | `brokers`                 | A list of Kafka brokers separated with a comma              | `"kafka:9092,kafka:9093"`
 `[kafka]`     | `topic`                   | The topic we should write the incoming events               | `"test.foobar"`
-`[rabbitmq]`  | `exchange`                | The exchange we should write the incoming events            | `"test-foobar"`
-`[rabbitmq]`  | `vhost`                   | Virtual host, by if none, should be `/`                     | `"/"`
-`[rabbitmq]`  | `host`                    | Hostname                                                    | `"localhost"`
-`[rabbitmq]`  | `port`                    | Port                                                        | `5672`
-`[rabbitmq]`  | `login`                   | Username                                                    | `"guest"`
-`[rabbitmq]`  | `password`                | Password                                                    | `"guest"`
-`[aerospike]` | `nodes`                   | A list of Aerospike nodes to connect                        | `"as:3001,as:3002"`
-`[aerospike]` | `namespace`               | The namespace/environment                                   | `"staging"`
+`[cassandra]` | `contact_points`          | A list of ScyllaDB nodes to connect                         | `"scylladb1:9042,scylladb2:9042"`
+`[cassandra]` | `keyspace`                | The selected keybase environment                            | `"staging"`
+`[cassandra]` | `manage_apps`             | If true, the application tokens are read from ScyllaDB. If false, tokens are read from the configuration. | `false`
 
 ### Optional options
 
@@ -145,20 +140,9 @@ section     | key     | description                 | example
 `[[origins]]` | `app_id` | The application ID          | `420`
 `[[origins]]` | `allowed` | An array of allowed origins | `["https://reddit.com", "https://google.com"]`
 
-#### PostgreSQL
+#### Test apps
 
-If enabled, the system will periodically fetch Application token and secrets
-from the CRM PostgreSQL database.
-
-section    | key           | description                                              | example
------------|---------------|----------------------------------------------------------|-----------------------------------------------
-`[postgres]` | `uri`           | The URI to the server                                    | `"postgres://login:password@host:port/database"`
-`[postgres]` | `pool_size`    | The maximum number of open connections                   | `1`
-`[postgres]` | `min_idle`     | The minimum number of idle connections                   | `1`
-`[postgres]` | `idle_timeout` | If idle, how many milliseconds to keep a connection open | `90000`
-`[postgres]` | `max_lifetime` | The maximum amount of time to keep a connection open     | `1800000`
-
-If the section doesn't exist, the config must have at least one `[[test_apps]]` included.
+If the ScyllaDB/Cassandra configuration has `manage_apps` set to false, the configuration file should have at least one test app defined.
 
 section        | key             | description                                                         | example
 ---------------|-----------------|---------------------------------------------------------------------|-----------------------
@@ -200,11 +184,8 @@ The request pipeline is:
   [encryption.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/encryption.rs) +
   [context.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/context.rs)
   for device id decrytpion)
-- If needed, load a device ID from Aerospike, save a new ID back to Aerospike
+- If needed, load a device ID from ScyllaDB, save a new ID back to ScyllaDB
   ([entity_storage.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/entity_storage.rs) +
   [gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs))
-- Send a protobuf event to Kafka and RabbitMQ
-  ([gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs) +
-  [bus](https://github.com/360dialog/xorc-gateway/tree/master/src/bus))
 - Respond back to the client
   ([gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs))
