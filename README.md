@@ -187,5 +187,6 @@ The request pipeline is:
 - If needed, load a device ID from ScyllaDB, save a new ID back to ScyllaDB
   ([entity_storage.rs](https://github.com/360dialog/xorc-gateway/tree/master/src/entity_storage.rs) +
   [gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs))
+- Send the event(s) to a Kafka topic
 - Respond back to the client
   ([gateway.rs](https://github.com/360dialog/xorc-gateway/blob/master/src/gateway.rs))
