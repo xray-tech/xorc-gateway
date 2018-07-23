@@ -1,24 +1,19 @@
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate lazy_static;
 #[allow(unused_imports)]
-#[macro_use]
-extern crate serde_json;
-#[macro_use]
-extern crate prost_derive;
-#[macro_use]
-extern crate prometheus;
+#[macro_use] extern crate serde_json;
 
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate lazy_static;
+#[macro_use] extern crate prost_derive;
+#[macro_use] extern crate prometheus;
+#[macro_use] extern crate slog;
+
+extern crate slog_json;
+extern crate slog_async;
+extern crate slog_term;
 extern crate cdrs;
 extern crate hex;
 extern crate crossbeam;
 extern crate hyper;
-extern crate pretty_env_logger;
-extern crate gelf;
-extern crate env_logger;
 extern crate ring;
 extern crate serde;
 extern crate chrono;
@@ -81,8 +76,7 @@ lazy_static! {
         };
 
     pub static ref IFA_MATCHING: IfaMatching = IfaMatching::new();
-    pub static ref GLOG: logger::GelfLogger =
-        logger::GelfLogger::new().unwrap();
+    pub static ref GLOG: slog::Logger = logger::Logger::new();
 
     pub static ref CONFIG: Config =
         match env::var("CONFIG") {
@@ -107,23 +101,24 @@ fn main() {
     threads.push({
         let control = control.clone();
         thread::spawn(move || {
-            info!("Starting the app registry thread...");
+            info!(*GLOG, "Starting the app registry thread...");
             APP_REGISTRY.run_updater(control);
-            info!("Exiting the app registry thread...");
+            info!(*GLOG, "Exiting the app registry thread...");
         })
     });
 
     threads.push({
         thread::spawn(move || {
-            info!("Starting the SDK gateway thread...");
+            info!(*GLOG, "Starting the SDK gateway thread...");
             Gateway::run(server_rx);
-            info!("Exiting the SDK gateway thread...");
+            info!(*GLOG, "Exiting the SDK gateway thread...");
         })
     });
 
     let _ = Signal::new(SIGINT).flatten_stream().into_future().and_then(|_| {
         if let Err(error) = server_tx.send(()) {
             error!(
+                *GLOG,
                 "There was an error sending the server shutdown signal: [{:?}]",
                 error
             );

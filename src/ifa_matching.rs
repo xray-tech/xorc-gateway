@@ -2,7 +2,9 @@ use encryption::Cleartext;
 use uuid::Uuid;
 use r2d2;
 use std::io;
+
 use ::CONFIG;
+use ::GLOG;
 
 use cdrs::{
     authenticators::NoneAuthenticator,
@@ -76,7 +78,7 @@ impl IfaMatching {
 
         let frame = self.run_query(query)
             .or_else(|e| {
-                error!("Could not read IFA from ScyllaDB: {:?}", e);
+                error!(*GLOG, "Could not read IFA from ScyllaDB: {:?}", e);
                 SCYLLADB_REQUEST_COUNTER.with_label_values(&["get", "error"]).inc();
                 Err(e)
             })
