@@ -7,12 +7,17 @@ use serde::{
     Serializer,
 };
 
+use ::GLOG;
+
 lazy_static! {
     static ref SECRET: Vec<u8> =
         if let Ok(ref secret) = env::var("SECRET") {
             base64::decode_config(secret, base64::URL_SAFE_NO_PAD).unwrap()
         } else {
-            warn!("No secret given, please set it in SECRET in base64 format (url safe, no pad)");
+            warn!(
+                *GLOG,
+                "No secret given, please set it in SECRET in base64 format (url safe, no pad)"
+            );
 
             vec![129, 164, 171, 19, 88, 96, 172, 49, 218, 122, 106, 79, 226, 124,
                  112, 233, 172, 165, 64, 54, 31, 139, 249, 226, 199, 148, 8, 27,

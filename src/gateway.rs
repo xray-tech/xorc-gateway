@@ -14,6 +14,7 @@ use hyper::{
 use std::{
     net::ToSocketAddrs,
     sync::Arc,
+    error::Error,
     env,
 };
 
@@ -60,12 +61,11 @@ use ::{
     APP_REGISTRY,
     CORS,
     CONFIG,
-    ENTITY_STORAGE,
+    IFA_MATCHING,
 };
 
 struct BusConnections {
     pub kafka: bus::Kafka,
-    pub rabbitmq: bus::RabbitMq,
 }
 
 pub struct Gateway {
@@ -86,7 +86,6 @@ impl Gateway {
     fn new() -> Gateway {
         let connections = Arc::new(BusConnections {
             kafka: bus::Kafka::new(),
-            rabbitmq: bus::RabbitMq::new(),
         });
 
         Gateway { connections }
@@ -94,9 +93,9 @@ impl Gateway {
 
     /// ROUTES
     ///
-    /// - OPTIONS to /     :: for CORS/web-push
-    /// - POST to /        :: SDK Events, sent to kafka/rmq
-    /// - GET to /watchdog :: Prometheus metrics
+    /// - OPTIONS to /xray/events/360dialog/sdk/v1 :: for CORS/web-push
+    /// - POST to /xray/events/360dialog/sdk/v1    :: SDK Events, sent to kafka/rmq
+    /// - GET to /metrics                          :: Prometheus metrics
     fn service(
         &self,
         req: Request<Body>,
@@ -104,11 +103,16 @@ impl Gateway {
     {
         match (req.method(), req.uri().path()) {
             // SDK OPTIONS request
-            (&Method::OPTIONS, "/") => {
+            (&Method::OPTIONS, "/xray/events/360dialog/sdk/v1") => {
+                REQUEST_COUNTER.with_label_values(&[
+                    "200",
+                    "options",
+                ]).inc();
+
                 Box::new(Self::handle_options())
             },
             // SDK events main path
-            (&Method::POST, "/") => {
+            (&Method::POST, "/xray/events/360dialog/sdk/v1") => {
                 let timer = RESPONSE_TIMES_HISTOGRAM.start_timer();
 
                 Box::new(Self::handle_sdk(req, self.connections.clone()).then(|response| {
@@ -117,7 +121,7 @@ impl Gateway {
                 }))
             },
             // Prometheus metrics
-            (&Method::GET, "/watchdog") => {
+            (&Method::GET, "/metrics") => {
                 Box::new(Self::handle_metrics())
             },
             _ => {
@@ -161,11 +165,11 @@ impl Gateway {
                     gw.service(req)
                 })
             })
-            .map_err(|e| error!("Critical server error, exiting: {}", e));
+            .map_err(|e| error!(*GLOG, "Critical server error, exiting: {}", e));
 
         info!(
-            "Running on {} threads. Listening on http://{}",
-            CONFIG.gateway.threads,
+            *GLOG,
+            "Running on {} threads. Listening on http://{}", CONFIG.gateway.threads,
             &addr
         );
 
@@ -224,7 +228,7 @@ impl Gateway {
                 let tracking_enabled = event.device.ifa_tracking_enabled;
 
                 let get_id = lazy(move || poll_fn(move || blocking(|| {
-                    let device_id = ENTITY_STORAGE
+                    let device_id = IFA_MATCHING
                         .get_id_for_ifa(&app_id, &ifa, tracking_enabled)
                         .map(move |device_id| {
                             let cleartext = Cleartext::from(device_id);
@@ -235,7 +239,7 @@ impl Gateway {
                             DeviceId::generate()
                         });
 
-                    let _ = ENTITY_STORAGE.put_id_for_ifa(
+                    let _ = IFA_MATCHING.put_id_for_ifa(
                         &app_id,
                         &device_id.cleartext,
                         &ifa,
@@ -279,7 +283,11 @@ impl Gateway {
         event: SDKEventBatch,
     ) -> impl Future<Item=(Vec<EventResult>, Context, SDKEventBatch), Error=GatewayError>
     {
-        if let Some(event_id) = event.events.iter().find(|ref e| e.is_register()).map(|e| e.id.clone()) {
+        let find_register_event = event.events.iter()
+            .find(|ref e| e.is_register())
+            .map(|e| e.id.clone());
+
+        if let Some(event_id) = find_register_event {
             Either::A(Self::create_new_device(context, event, event_id))
         } else {
             let results = event.events.iter().map(|e| {
@@ -296,7 +304,7 @@ impl Gateway {
     /// SDK event handling is here
     fn handle_event(
         body: Vec<u8>,
-        mut event: SDKEventBatch,
+        event: SDKEventBatch,
         headers: HeaderMap,
         connections: Arc<BusConnections>
     ) -> impl Future<Item=(String, Context), Error=ErrorWithContext> + 'static + Send
@@ -320,34 +328,27 @@ impl Gateway {
 
         match APP_REGISTRY.validate(&event, &context, &body) {
             Ok(()) => {
-                if let Some(ref ip) = context.ip { event.device.set_location(ip) }
-
                 let response = Self::generate_event_results(context, event)
                     .map_err(|e| (e, None))
                     .and_then(move |(results, context, event)| {
+                        let event_count = event.events.len();
                         let proto_event: output::events::SdkEventBatch =
-                            event.into();
+                            event.into_proto(&context);
 
                         let mut payload = Vec::new();
                         proto_event.encode(&mut payload).unwrap();
 
-                        let kafka = connections
+                        connections
                             .kafka
                             .publish(&payload, &context)
-                            .or_else(|e| {
-                                /// This here folk's is a silencer for Kafka
-                                /// errors, which will be removed when we switch
-                                /// the actual production to the new OAM.
-                                error!("Couldn't publish to kafka: [{:?}]", e);
-
-                                ok(())
-                            });
-
-                        let rabbitmq = connections.rabbitmq.publish(&payload, &context);
-
-                        kafka.join(rabbitmq)
                             .or_else(|e| { err((e, None)) })
                             .map(move |_| {
+                                info!(
+                                    *GLOG,
+                                    "Successfully sent {} event(s) downstream", event_count;
+                                    &context
+                                );
+
                                 EVENTS_COUNTER.inc_by(results.len() as f64);
 
                                 (
@@ -379,24 +380,19 @@ impl Gateway {
             .or_else(|_| err((GatewayError::InternalServerError("body concat"), None)))
             .and_then(move |body| {
                 if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
-                    let event_handling =
-                        Self::handle_event(
-                            body.to_vec(),
-                            event,
-                            headers,
-                            connections
-                        );
-
-                    Either::A(event_handling)
+                    Either::A(Self::handle_event(
+                        body.to_vec(),
+                        event,
+                        headers,
+                        connections
+                    ))
                 } else {
                     Either::B(err((GatewayError::InvalidPayload, None)))
                 }
             })
             .then(move |res| {
                 match res {
-                    Ok((sdk_response, context)) => {
-                        let json_body = serde_json::to_string(&sdk_response).unwrap();
-
+                    Ok((json_body, context)) => {
                         let mut builder =
                             if let Some(ref cors) = *CORS {
                                 cors.response_builder_origin(
@@ -408,11 +404,28 @@ impl Gateway {
                                 Response::builder()
                             };
 
+                        builder.header(
+                            header::CONTENT_TYPE,
+                            "application/json"
+                        );
+
+                        REQUEST_COUNTER.with_label_values(&[
+                            "200",
+                            "sdk_events",
+                        ]).inc();
+
                         builder.status(StatusCode::OK);
                         ok(builder.body(json_body.into()).unwrap())
                     },
                     Err((e, context)) => {
-                        let _ = GLOG.log_error(&e, &context);
+                        match context {
+                            Some(ref context) =>
+                                error!(*GLOG, "Response error: {}", e.description(); context),
+                            _ => {
+                                error!(*GLOG, "Response error: {}", e.description());
+                            }
+                        }
+
                         let response = error::into_response(e, context);
 
                         REQUEST_COUNTER.with_label_values(&[

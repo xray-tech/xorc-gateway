@@ -17,13 +17,25 @@ use error::GatewayError;
 use events::input;
 use context::Context;
 use crossbeam::sync::ArcCell;
+use uuid::Uuid;
 use r2d2;
-use r2d2_postgres::{PostgresConnectionManager, TlsMode};
 use hex;
 use ::{GLOG, CONFIG};
 
+use cdrs::{
+    authenticators::NoneAuthenticator,
+    compression::Compression,
+    query::QueryBuilder,
+    transport::TransportTcp,
+    types::ByName,
+    cluster::{LoadBalancingStrategy, LoadBalancer, ClusterConnectionManager},
+};
+
+type CassandraPool =
+    r2d2::Pool<ClusterConnectionManager<NoneAuthenticator, TransportTcp>>;
+
 pub struct Application {
-    pub id: i32,
+    pub id: String,
     pub token: Option<String>,
     pub ios_secret: Option<hmac::VerificationKey>,
     pub android_secret: Option<hmac::VerificationKey>,
@@ -33,25 +45,7 @@ pub struct Application {
 pub struct AppRegistry {
     allow_empty_signature: bool,
     apps: ArcCell<HashMap<String, Application>>,
-    pool: Option<r2d2::Pool<PostgresConnectionManager>>,
-}
-
-lazy_static! {
-    static ref APPS_QUERY: &'static str =
-        indoc!("
-            SELECT id, sdk_token,
-                i.sdk_api_secret AS ios_secret,
-                a.sdk_api_secret AS android_secret,
-                w.sdk_api_secret AS web_secret
-            FROM applications
-            LEFT JOIN ios_applications i
-                ON i.application_id = applications.id
-            LEFT JOIN android_applications a
-                ON a.application_id = applications.id
-            LEFT JOIN web_applications w
-                ON w.application_id = applications.id
-            WHERE deleted_at IS NULL
-        ");
+    pool: Option<CassandraPool>,
 }
 
 impl AppRegistry {
@@ -65,20 +59,28 @@ impl AppRegistry {
     /// `secret_ios`, `secret_android` and `secret_web`. If any of these is
     /// missing, the system will not allow requests for those platforms.
     pub fn new() -> AppRegistry {
-        if let Some(psql_config) = CONFIG.postgres.as_ref() {
-            info!("Apps loaded form PostgreSQL CRM database.");
+        if CONFIG.cassandra.manage_apps {
+            let config = &CONFIG.cassandra;
+            info!(*GLOG, "Apps loaded from ScyllaDB.");
 
-            let manager = PostgresConnectionManager::new(
-                psql_config.uri.as_str(),
-                TlsMode::None
-            ).expect("Couldn't connect to PostgreSQL");
+            let cluster = config
+                .contact_points
+                .split(",")
+                .map(|addr| TransportTcp::new(addr).unwrap())
+                .collect();
 
-            let pool = r2d2::Builder::new()
-                .max_size(psql_config.pool_size)
-                .min_idle(Some(psql_config.min_idle))
-                .idle_timeout(Some(Duration::from_millis(psql_config.idle_timeout)))
-                .max_lifetime(Some(Duration::from_millis(psql_config.max_lifetime)))
-                .build(manager).expect("Couldn't create a PostgreSQL connection pool");
+            let load_balancer = LoadBalancer::new(cluster, LoadBalancingStrategy::RoundRobin);
+
+            let manager = ClusterConnectionManager::new(
+                load_balancer,
+                NoneAuthenticator,
+                Compression::None
+            );
+
+            let pool = r2d2::Pool::builder()
+                .max_size(1)
+                .build(manager)
+                .unwrap();
 
             let registry = AppRegistry {
                 allow_empty_signature: CONFIG.gateway.allow_empty_signature,
@@ -90,7 +92,7 @@ impl AppRegistry {
 
             registry
         } else {
-            warn!("Apps loaded form configuration file. Development only!");
+            warn!(*GLOG, "Apps loaded form configuration file. Development only!");
 
             let apps = CONFIG.test_apps.as_ref().unwrap()
                 .iter()
@@ -108,14 +110,14 @@ impl AppRegistry {
                         .clone();
 
                     let app = Self::create_app(
-                        test_app.app_id,
+                        test_app.app_id.clone(),
                         test_app.token.clone(),
                         ios_secret,
                         android_secret,
                         web_secret,
                     );
 
-                    acc.insert(format!("{}", test_app.app_id), app);
+                    acc.insert(test_app.app_id.clone(), app);
 
                     acc
                 });
@@ -164,12 +166,12 @@ impl AppRegistry {
         }
 
         if event.events.len() == 0 {
-            warn!("Received a request without any events in it!");
+            warn!(*GLOG, "Received a request without any events in it!");
             return Err(GatewayError::InvalidPayload)
         }
 
         if self.allow_empty_signature {
-            warn!("Skipped signature checks because of configuration. Use only on development!");
+            warn!(*GLOG, "Skipped signature checks because of configuration. Use only on development!");
             return Ok(())
         }
 
@@ -197,6 +199,7 @@ impl AppRegistry {
         while control.load(Ordering::Relaxed) {
             if let Err(e) = self.update_apps() {
                 error!(
+                    *GLOG,
                     "Error updating application data from PostgreSQL, ignoring: [{:?}]",
                     e
                 );
@@ -207,7 +210,7 @@ impl AppRegistry {
     }
 
     fn create_key(
-        app_id: i32,
+        app_id: &str,
         column: &'static str,
         s: &[u8]
     ) -> Option<hmac::VerificationKey> {
@@ -218,9 +221,10 @@ impl AppRegistry {
             ))
         }).or_else(|e| {
             error!(
+                *GLOG,
                 "Error converting {} for app {}",
                 column,
-                app_id
+                app_id,
             );
 
             Err(e)
@@ -228,7 +232,7 @@ impl AppRegistry {
     }
 
     fn create_app(
-        id: i32,
+        id: String,
         token: Option<String>,
         ios_secret: Option<String>,
         android_secret: Option<String>,
@@ -239,15 +243,15 @@ impl AppRegistry {
 
         let ios_key = ios_secret
             .as_ref()
-            .and_then(|s| Self::create_key(id, "ios_secret", &s.as_bytes()));
+            .and_then(|s| Self::create_key(&id, "ios_secret", &s.as_bytes()));
 
         let android_key = android_secret
             .as_ref()
-            .and_then(|s| Self::create_key(id, "android_secret", &s.as_bytes()));
+            .and_then(|s| Self::create_key(&id, "android_secret", &s.as_bytes()));
 
         let web_key = web_secret
             .as_ref()
-            .and_then(|s| Self::create_key(id, "web_secret", &s.as_bytes()));
+            .and_then(|s| Self::create_key(&id, "web_secret", &s.as_bytes()));
 
         Application {
             id: id,
@@ -260,31 +264,65 @@ impl AppRegistry {
 
     fn update_apps(&self) -> Result<(), io::Error> {
         if let Some(ref pool) = self.pool {
-            let connection = pool.get()
-                .map_err(|_| io::Error::new(io::ErrorKind::ConnectionAborted, "pool död"))?;
+            let query = QueryBuilder::new(
+                format!(
+                    "SELECT app_id, sdk_token, ios_secret, android_secret, web_secret FROM {}.gw_application_access",
+                    CONFIG.cassandra.keyspace
+                )
+            ).finalize();
 
-            let apps = connection.query(&APPS_QUERY, &[]).map(|rows| {
-                rows.iter().fold(HashMap::new(), |mut acc, row| {
-                    let id = row.get("id");
+            let connection = pool.get()
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::ConnectionAborted,
+                        "Couldn't get a ScyllaDB connection for application registry",
+                    )
+                })?;
+
+            let frame = connection
+                .query(query, false, false)
+                .map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::ConnectionAborted,
+                        "Couldn't query application settings from ScyllaDB",
+                    )
+                })?;
+
+            let rows = frame
+                .get_body()
+                .ok()
+                .and_then(|body| body.into_rows());
+
+            if let Some(rows) = rows {
+                let apps = rows.iter().fold(HashMap::new(), |mut acc, row| {
+                    let id: Uuid                       = row.r_by_name("app_id").unwrap();
+                    let sdk_token: Option<String>      = row.by_name("sdk_token").unwrap();
+                    let ios_secret: Option<String>     = row.by_name("ios_secret").unwrap();
+                    let web_secret: Option<String>     = row.by_name("web_secret").unwrap();
+                    let android_secret: Option<String> = row.by_name("android_secret").unwrap();
+
+                    let id_string = id.hyphenated().to_string();
 
                     let app = Self::create_app(
-                        id,
-                        row.get("sdk_token"),
-                        row.get("ios_secret"),
-                        row.get("android_secret"),
-                        row.get("web_secret"),
+                        id_string.clone(),
+                        sdk_token,
+                        ios_secret,
+                        android_secret,
+                        web_secret,
                     );
 
-                    let _ = GLOG.log_app_update(&app);
-                    acc.insert(format!("{}", id), app);
+                    acc.insert(id_string, app);
 
                     acc
-                })
-            }).map_err(|_| io::Error::new(io::ErrorKind::ConnectionAborted, "query död"))?;
+                });
 
-            self.swap_apps(apps);
+                self.swap_apps(apps);
+            } else {
+                warn!(*GLOG, "No apps found, no access to gateway!");
+                self.swap_apps(HashMap::new());
+            }
         } else {
-            warn!("No PostgreSQL connection defined, registry update dysfunctional");
+            warn!(*GLOG, "No ScyllaDB connection defined, registry update dysfunctional");
         }
 
         Ok(())
@@ -303,6 +341,7 @@ mod tests {
     use http::header::HeaderValue;
     use context::Context;
     use serde_json;
+    use uuid::Uuid;
 
     use events::input::{
         Platform,
@@ -340,9 +379,15 @@ mod tests {
 
     #[test]
     fn test_app_creation_empty_secrets() {
-        let app = AppRegistry::create_app(420, None, None, None, None);
+        let app = AppRegistry::create_app(
+            Uuid::nil().hyphenated().to_string(),
+            None,
+            None,
+            None,
+            None
+        );
 
-        assert_eq!(420, app.id);
+        assert_eq!(Uuid::nil().hyphenated().to_string(), app.id);
 
         assert!(app.token.is_none());
         assert!(app.ios_secret.is_none());
@@ -353,7 +398,7 @@ mod tests {
     #[test]
     fn test_app_creation_with_token() {
         let app = AppRegistry::create_app(
-            420,
+            Uuid::nil().hyphenated().to_string(),
             Some(TOKEN.to_string()),
             None,
             None,
@@ -366,7 +411,7 @@ mod tests {
     #[test]
     fn test_app_creation_with_secrets() {
         let app = AppRegistry::create_app(
-            420,
+            Uuid::nil().hyphenated().to_string(),
             None,
             Some(IOS_SECRET.to_string()),
             Some(ANDROID_SECRET.to_string()),
@@ -396,7 +441,11 @@ mod tests {
         let context = Context::new(&header_map, "123", Platform::Ios);
         let app_registry = AppRegistry::new();
 
-        let mut event = create_test_event("1", "ios");
+        let mut event = create_test_event(
+            "22222222-0000-0000-0000-000000000000",
+            "ios"
+        );
+
         event.events.clear();
 
         let validation = app_registry.validate(
@@ -445,7 +494,7 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            &create_test_event("1", "ios"),
+            &create_test_event("22222222-0000-0000-0000-000000000000", "ios"),
             &context,
             "kulli".as_bytes()
         );
@@ -488,7 +537,7 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            &create_test_event("1", "android"),
+            &create_test_event("22222222-0000-0000-0000-000000000000", "android"),
             &context,
             "kulli".as_bytes()
         );
@@ -530,7 +579,7 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            &create_test_event("1", "web"),
+            &create_test_event("22222222-0000-0000-0000-000000000000", "web"),
             &context,
             "kulli".as_bytes()
         );
@@ -588,7 +637,7 @@ mod tests {
         assert_eq!(
             Err(GatewayError::InvalidToken),
             app_registry.validate(
-                &create_test_event("1", "web"),
+                &create_test_event("22222222-0000-0000-0000-000000000000", "web"),
                 &context,
                 "kulli".as_bytes()
             )
@@ -608,7 +657,7 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            &create_test_event("1", "web"),
+            &create_test_event("22222222-0000-0000-0000-000000000000", "web"),
             &context,
             "kulli".as_bytes()
         );
@@ -663,7 +712,7 @@ mod tests {
         let app_registry = AppRegistry::new();
 
         let validation = app_registry.validate(
-            &create_test_event("1", "android"),
+            &create_test_event("22222222-0000-0000-0000-000000000000", "android"),
             &context,
             "kulli".as_bytes()
         );

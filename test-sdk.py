@@ -8,26 +8,22 @@ import hmac
 import base64
 import argparse
 
+app_id = "a2faae91-d52f-497d-9029-d91be08c28c5"
 app_config = {
-        "3" : { 
+        app_id : {
             "token"          : bytearray.fromhex('46732a28cd445366c6c8dcbd57500af4e69597c8ebe224634d6ccab812275c9c'),
-            "secret_android" : bytearray.fromhex('d685e53ae50c945e5ae4f36170d7213360a25ed91b91a647574aa384d2b6f901'),
+            "secret_android" : bytearray.fromhex('1b66af517dd60807aeff8b4582d202ef500085bc0cec92bc3e67f0c58d6203b5'),
             "secret_ios"     : bytearray.fromhex('1b66af517dd60807aeff8b4582d202ef500085bc0cec92bc3e67f0c58d6203b5'),
             "secret_web"     : bytearray.fromhex('4c553960fdc2a82f90b84f6ef188e836818fcee2c43a6c32bd6c91f41772657f'),
             }
         }
 
-parser = argparse.ArgumentParser(description='SDK Gateway test script')
-parser.add_argument('--app-id', action='store', choices=['3'], required=True, help='preconfigured app-id to use')
-args = parser.parse_args()
-
-app_id = args.app_id
 token           = app_config[app_id]['token']
 secret_android  = app_config[app_id]['secret_android']
 secret_ios      = app_config[app_id]['secret_ios']
 secret_web      = app_config[app_id]['secret_web']
 
-path = '/'
+path = '/xray/events/360dialog/sdk/v1'
 URL = 'http://localhost:1337{}'.format(path)
 v2_app_instance_id = "this-is-an-app-instance-id"
 device_id = None #"hh30hrGVNrBTz/5bOerdBn5/Vz9zOx9G5hpavkuRWn9ECAWwsyubeA+SFDBdZ3AXeyFPF7JDGXy0ctAxtuAsxA=="
@@ -44,6 +40,8 @@ base_data = {
     'device': {
         'platform' : 'android',
         'carrier_country': 'de',
+        'ifa_tracking_enabled': True,
+        'ifa': '594e7a0a-e7be-4d8b-a6de-51aafded6db7',
         'carrier_name': '1&1',
         'locale': 'fr',
         'time_zone': 'Europe/Berlin',
@@ -99,7 +97,7 @@ def handle_result(response):
     if response.status_code not in (200, 201):
         raise Exception('invalid response code: 200 != {}\nbody: {}'.format(response.status_code, response.text))
 
-    j = json.loads(response.json())
+    j = response.json()
 
     print(j)
 
@@ -366,19 +364,5 @@ if not device_id:
     device_id = get_device_id()
 
 print (device_id)
-send_app_open()
-send_push_token_update()
-send_push_opt_in()
-send_email_subscribe_no_email()
-send_email_subscribe_empty_email()
-send_email_subscribe_invalid_email()
-send_email_subscribe()
-send_email_confirm()
-send_email_change()
-send_email_confirm()
-send_email_unsubscribe()
-send_email_resubscribe()
-send_email_remove()
-test_reusing_same_did()
 #send_batch()
 #send_empty()
