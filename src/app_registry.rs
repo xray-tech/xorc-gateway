@@ -20,7 +20,7 @@ use crossbeam::sync::ArcCell;
 use uuid::Uuid;
 use r2d2;
 use hex;
-use ::{GLOG, CONFIG};
+use ::{GLOG, CONFIG, RUST_ENV};
 
 use cdrs::{
     authenticators::NoneAuthenticator,
@@ -48,6 +48,12 @@ pub struct AppRegistry {
     pool: Option<CassandraPool>,
 }
 
+impl Default for AppRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppRegistry {
     /// Caches application authentication information either from a database or
     /// staticly from a config file. If the loaded configuration holds
@@ -65,7 +71,7 @@ impl AppRegistry {
 
             let cluster = config
                 .contact_points
-                .split(",")
+                .split(',')
                 .map(|addr| TransportTcp::new(addr).unwrap())
                 .collect();
 
@@ -92,8 +98,6 @@ impl AppRegistry {
 
             registry
         } else {
-            warn!(*GLOG, "Apps loaded form configuration file. Development only!");
-
             let apps = CONFIG.test_apps.as_ref().unwrap()
                 .iter()
                 .fold(HashMap::new(), |mut acc, test_app| {
@@ -112,9 +116,9 @@ impl AppRegistry {
                     let app = Self::create_app(
                         test_app.app_id.clone(),
                         test_app.token.clone(),
-                        ios_secret,
-                        android_secret,
-                        web_secret,
+                        &ios_secret,
+                        &android_secret,
+                        &web_secret,
                     );
 
                     acc.insert(test_app.app_id.clone(), app);
@@ -165,13 +169,13 @@ impl AppRegistry {
             if sent_token != valid_token { return Err(GatewayError::InvalidToken) }
         }
 
-        if event.events.len() == 0 {
-            warn!(*GLOG, "Received a request without any events in it!");
+        if event.events.is_empty() {
+            trace!(*GLOG, "Received a request without any events in it!");
             return Err(GatewayError::InvalidPayload)
         }
 
         if self.allow_empty_signature {
-            warn!(*GLOG, "Skipped signature checks because of configuration. Use only on development!");
+            trace!(*GLOG, "Skipped signature checks because of configuration.");
             return Ok(())
         }
 
@@ -234,31 +238,31 @@ impl AppRegistry {
     fn create_app(
         id: String,
         token: Option<String>,
-        ios_secret: Option<String>,
-        android_secret: Option<String>,
-        web_secret: Option<String>,
+        ios_secret: &Option<String>,
+        android_secret: &Option<String>,
+        web_secret: &Option<String>,
     ) -> Application
     {
         APP_UPDATE_COUNTER.inc();
 
-        let ios_key = ios_secret
+        let ios_secret = ios_secret
             .as_ref()
             .and_then(|s| Self::create_key(&id, "ios_secret", &s.as_bytes()));
 
-        let android_key = android_secret
+        let android_secret = android_secret
             .as_ref()
             .and_then(|s| Self::create_key(&id, "android_secret", &s.as_bytes()));
 
-        let web_key = web_secret
+        let web_secret = web_secret
             .as_ref()
             .and_then(|s| Self::create_key(&id, "web_secret", &s.as_bytes()));
 
         Application {
-            id: id,
-            token: token,
-            ios_secret: ios_key,
-            android_secret: android_key,
-            web_secret: web_key,
+            id,
+            token,
+            ios_secret,
+            android_secret,
+            web_secret,
         }
     }
 
@@ -306,9 +310,9 @@ impl AppRegistry {
                     let app = Self::create_app(
                         id_string.clone(),
                         sdk_token,
-                        ios_secret,
-                        android_secret,
-                        web_secret,
+                        &ios_secret,
+                        &android_secret,
+                        &web_secret,
                     );
 
                     acc.insert(id_string, app);
@@ -382,9 +386,9 @@ mod tests {
         let app = AppRegistry::create_app(
             Uuid::nil().hyphenated().to_string(),
             None,
-            None,
-            None,
-            None
+            &None,
+            &None,
+            &None
         );
 
         assert_eq!(Uuid::nil().hyphenated().to_string(), app.id);
@@ -400,9 +404,9 @@ mod tests {
         let app = AppRegistry::create_app(
             Uuid::nil().hyphenated().to_string(),
             Some(TOKEN.to_string()),
-            None,
-            None,
-            None
+            &None,
+            &None,
+            &None
         );
 
         assert_eq!(Some(TOKEN.to_string()), app.token);
@@ -413,9 +417,9 @@ mod tests {
         let app = AppRegistry::create_app(
             Uuid::nil().hyphenated().to_string(),
             None,
-            Some(IOS_SECRET.to_string()),
-            Some(ANDROID_SECRET.to_string()),
-            Some(WEB_SECRET.to_string()),
+            &Some(IOS_SECRET.to_string()),
+            &Some(ANDROID_SECRET.to_string()),
+            &Some(WEB_SECRET.to_string()),
         );
 
         assert!(app.ios_secret.is_some());

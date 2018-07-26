@@ -28,13 +28,19 @@ pub struct IfaMatching {
     pool: CassandraPool,
 }
 
+impl Default for IfaMatching {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IfaMatching {
     pub fn new() -> IfaMatching {
         let config = &CONFIG.cassandra;
 
         let cluster = config
             .contact_points
-            .split(",")
+            .split(',')
             .map(|addr| TransportTcp::new(addr).unwrap())
             .collect();
 
@@ -190,7 +196,7 @@ impl IfaMatching {
         ifa.as_ref()
             .and_then(|ref ifa| Uuid::parse_str(ifa).ok())
             .and_then(|ifa| {
-                if ifa_tracking_enabled == true && ifa != Uuid::nil() {
+                if ifa_tracking_enabled && ifa != Uuid::nil() {
                     Some(ifa)
                 } else {
                     None

@@ -76,8 +76,8 @@ fn response_builder_for(context: &Option<Context>) -> response::Builder {
 }
 
 pub fn into_response(
-    error: GatewayError,
-    context: Option<Context>,
+    error: &GatewayError,
+    context: &Option<Context>,
 ) -> Response<Body> {
     let mut builder = response_builder_for(&context);
 

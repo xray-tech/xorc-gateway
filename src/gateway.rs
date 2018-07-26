@@ -80,8 +80,6 @@ impl Clone for Gateway {
     }
 }
 
-type ErrorWithContext = (GatewayError, Option<Context>);
-
 impl Gateway {
     fn new() -> Gateway {
         let connections = Arc::new(BusConnections {
@@ -303,11 +301,11 @@ impl Gateway {
 
     /// SDK event handling is here
     fn handle_event(
-        body: Vec<u8>,
+        body: &[u8],
         event: SDKEventBatch,
-        headers: HeaderMap,
+        headers: &HeaderMap,
         connections: Arc<BusConnections>
-    ) -> impl Future<Item=(String, Context), Error=ErrorWithContext> + 'static + Send
+    ) -> impl Future<Item=(String, Context), Error=(GatewayError, Option<Context>)> + 'static + Send
     {
         let context = Context::new(
             &headers,
@@ -381,9 +379,9 @@ impl Gateway {
             .and_then(move |body| {
                 if let Ok(event) = serde_json::from_slice::<SDKEventBatch>(&body) {
                     Either::A(Self::handle_event(
-                        body.to_vec(),
+                        body.as_ref(),
                         event,
-                        headers,
+                        &headers,
                         connections
                     ))
                 } else {
@@ -426,7 +424,7 @@ impl Gateway {
                             }
                         }
 
-                        let response = error::into_response(e, context);
+                        let response = error::into_response(&e, &context);
 
                         REQUEST_COUNTER.with_label_values(&[
                             response.status().as_str(),

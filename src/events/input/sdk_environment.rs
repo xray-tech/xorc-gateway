@@ -5,8 +5,7 @@ pub struct SDKEnvironment {
     pub sdk_version: Option<String>,
     pub app_version: Option<String>,
     pub app_store_id: Option<String>,
-    #[serde(default)]
-    pub app_id: String,
+    #[serde(default)] pub app_id: String,
     pub app_instance_id: Option<String>,
 }
 
@@ -18,7 +17,6 @@ impl Into<output::events::SdkEnvironment> for SDKEnvironment {
             app_version: self.app_version,
             app_store_id: self.app_store_id,
             app_instance_id: self.app_instance_id,
-            ..Default::default()
         }
     }
 }

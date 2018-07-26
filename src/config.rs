@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::prelude::*;
 use toml;
+use ::RUST_ENV;
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
@@ -26,7 +27,22 @@ impl Config {
         file.read_to_string(&mut config_toml)
             .unwrap_or_else(|err| panic!("Error while reading config: [{}]", err));
 
-        toml::from_str(&config_toml).unwrap_or_else(|err| panic!("Error while reading config: [{}]", err))
+        let config: Config = toml::from_str(&config_toml)
+            .unwrap_or_else(|err| {
+                panic!("Error while reading config: [{}]", err)
+            });
+
+        if &*RUST_ENV != "development" {
+            if config.gateway.allow_empty_signature {
+                panic!("Cannot allow empty signatures outside of development environment.")
+            }
+
+            if config.cassandra.manage_apps {
+                panic!("Cannot allow manage_apps to be false outside of development environment.")
+            }
+        }
+
+        config
     }
 }
 

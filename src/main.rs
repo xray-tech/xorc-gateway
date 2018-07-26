@@ -65,6 +65,11 @@ use std::{
 
 /// Global non-IO services that can be raced from all the threads.
 lazy_static! {
+    pub static ref RUST_ENV: String =
+        env::var("RUST_ENV").unwrap_or_else(|_| {
+            String::from("development")
+        });
+
     pub static ref GEOIP: maxminddb::Reader =
         match env::var("GEOIP") {
             Ok(geoip_location) => {

@@ -121,7 +121,6 @@ impl Into<common::Device> for SDKDevice {
                 name: self.browser_name,
                 ua: self.browser_ua,
                 version: self.browser_version,
-                ..Default::default()
             }),
 
             ..Default::default()
@@ -131,7 +130,7 @@ impl Into<common::Device> for SDKDevice {
             dev.language = Some(language);
         } else if let Some(ref locale) = dev.locale {
             dev.language = locale
-                .find("_")
+                .find('_')
                 .map(|index| {
                     locale[0..index].to_string()
                 });

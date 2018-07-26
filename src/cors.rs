@@ -25,7 +25,7 @@ impl Cors {
                 .iter()
                 .fold(HashMap::new(), |mut acc, origin| {
                     acc.insert(
-                        format!("{}", origin.app_id),
+                        origin.app_id.to_string(),
                         HashSet::from_iter(origin.allowed.iter().map(|s| s.to_string()))
                     );
 
@@ -33,7 +33,7 @@ impl Cors {
                 });
 
             Cors {
-                allowed_origins: allowed_origins,
+                allowed_origins,
                 allowed_methods: cors_config.allowed_methods.clone(),
                 allowed_headers: cors_config.allowed_headers.clone(),
             }

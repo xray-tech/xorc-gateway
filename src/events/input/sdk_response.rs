@@ -37,9 +37,9 @@ pub struct EventResult {
 impl EventResult {
     pub fn new(id: String, status: EventStatus) -> EventResult {
         EventResult {
-            id: id,
+            id,
             registration_data: None,
-            status: status,
+            status,
         }
     }
 
@@ -51,7 +51,7 @@ impl EventResult {
     ) -> EventResult
     {
         let registration_data = Some(RegistrationData {
-            api_token: api_token,
+            api_token,
             device_id: ciphertext,
         });
 

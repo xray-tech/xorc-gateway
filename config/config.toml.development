@@ -2,7 +2,7 @@
 threads = 4
 process_name_prefix = "sdk-gateway-worker-"
 default_token = "T0BdxB0O/+eRZhN6REPmbYpTqjxCTtUgirbW7ABJ8renKaxoGbHFsOX2iLFhuWaJbZHzmTnvKv15fv/87ceIQQ=="
-allow_empty_signature = true
+allow_empty_signature = false
 
 [kafka]
 brokers = "localhost:9092"

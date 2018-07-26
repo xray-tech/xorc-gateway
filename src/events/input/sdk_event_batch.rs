@@ -33,12 +33,10 @@ impl SDKEventBatch
                 type_: Some(String::from("events.SDKEventBatch")),
                 feed: Some(String::from("360dialog")),
                 recipient_id: self.recipient_id,
-                ..Default::default()
             },
             environment: Some(self.environment.into()),
             device: Some(self.device.into()),
             event: self.events.into_iter().map(|ev| ev.into()).collect(),
-            ..Default::default()
         }
     }
 }

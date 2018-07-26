@@ -36,8 +36,8 @@ impl DeviceId {
         let ciphertext = Ciphertext::encrypt(&cleartext);
 
         DeviceId {
-            ciphertext: ciphertext,
-            cleartext: cleartext,
+            ciphertext,
+            cleartext,
         }
     }
 }
@@ -72,15 +72,15 @@ impl Context {
                 match Cleartext::decrypt(&ciphertext) {
                     Ok(cleartext) => {
                         Some(DeviceId {
-                            ciphertext: ciphertext,
-                            cleartext: cleartext,
+                            ciphertext,
+                            cleartext,
                         })
                     },
                     _ => None
                 }
             });
 
-        let ip_addr: Option<IpAddr> = headers
+        let ip: Option<IpAddr> = headers
             .get("X-Real-IP")
             .and_then(|h| h.to_str().ok())
             .and_then(|s| s.parse().ok());
@@ -88,10 +88,10 @@ impl Context {
         Context {
             api_token: Self::get_value(&headers, "D360-Api-Token"),
             app_id: String::from(app_id),
-            platform: platform,
-            device_id: device_id,
+            platform,
+            device_id,
             signature: Self::get_value(&headers, "D360-Signature"),
-            ip: ip_addr,
+            ip,
             origin: Self::get_value(&headers, header::ORIGIN),
         }
     }
@@ -106,7 +106,7 @@ impl Context {
         headers
             .get(key)
             .and_then(|h| h.to_str().ok())
-            .map(|s| String::from(s))
+            .map(String::from)
     }
 }
 

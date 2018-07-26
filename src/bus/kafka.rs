@@ -39,12 +39,13 @@ impl Kafka {
 
     pub fn publish(
         &self,
-        payload: &Vec<u8>,
+        payload: &[u8],
         context: &Context,
     ) -> impl Future<Item=(), Error=GatewayError>
     {
         let routing_key = Self::routing_key(context);
-        let record: FutureRecord<Vec<u8>, Vec<u8>> = FutureRecord {
+
+        let record: FutureRecord<Vec<u8>, [u8]> = FutureRecord {
             topic: CONFIG.kafka.topic.as_ref(),
             partition: None,
             payload: Some(payload),
