@@ -1,0 +1,17 @@
+[gateway]
+threads = 4
+process_name_prefix = "sdk-gateway-worker-"
+default_token = "T0BdxB0O/+eRZhN6REPmbYpTqjxCTtUgirbW7ABJ8renKaxoGbHFsOX2iLFhuWaJbZHzmTnvKv15fv/87ceIQQ=="
+allow_empty_signature = false
+
+[kafka]
+brokers = ["kafka.service.consul:9092"]
+topic = "sdk"
+
+[cors]
+allowed_methods = "POST,OPTIONS"
+allowed_headers = "Content-Type, Content-Length, X-Real-IP, XORC-Signature, XORC-Device-Id, XORC-Api-Token"
+
+[[origins]]
+app_id = "44444444-0000-0000-0000-000000000000"
+allowed = ["https://www.example.com"]

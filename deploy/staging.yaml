@@ -1,0 +1,7 @@
+replicaCount: 1
+
+kafka:
+  endpoint: staging-kafka:9092
+
+scylla:
+  endpoint: staging-scylla-scylla:9042

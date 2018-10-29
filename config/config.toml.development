@@ -1,0 +1,18 @@
+[gateway]
+threads = 4
+process_name_prefix = "sdk-gateway-worker-"
+default_token = "T0BdxB0O/+eRZhN6REPmbYpTqjxCTtUgirbW7ABJ8renKaxoGbHFsOX2iLFhuWaJbZHzmTnvKv15fv/87ceIQQ=="
+allow_empty_signature = false
+
+[kafka]
+brokers = "localhost:9092"
+topic = "sdk"
+
+[cors]
+allowed_methods = "HERP,DERP"
+allowed_headers = "Content-Type, Content-Length"
+
+[cassandra]
+keyspace = "sdk"
+contact_points = "localhost:9042"
+manage_apps = true
