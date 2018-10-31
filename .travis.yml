@@ -1,12 +1,16 @@
 language: rust
 before_install:
+  - sudo add-apt-repository -y ppa:maarten-fonville/protobuf
   - sudo apt-get -y update
-  - sudo apt-get -y install libssl-dev protobuf-compile libffi-dev build-essential python
+  - sudo apt-get -y install libssl-dev protobuf-compiler libffi-dev build-essential python wget
+env:
+  - RUST_BACKTRACE=1
 
 matrix:
   include:
     - rust: beta
     - rust: stable
+    - rust: nightly
 
 cache:
   apt: true
@@ -15,5 +19,4 @@ cache:
     - target/debug/build
 
 script:
-  - cargo build
   - cargo test
