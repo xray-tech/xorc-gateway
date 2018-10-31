@@ -1,5 +1,8 @@
 # XORC Gateway
 
+[![Travis Build Status](https://api.travis-ci.org/xray-tech/xorc-gateway.svg?branch=master)](https://travis-ci.org/xray-tech/xorc-gateway)
+[![Apache licensed](https://img.shields.io/badge/license-apache-blue.svg)](./LICENSE)
+
 The main gateway to the XORC platform. The main routes are:
 
 - `OPTIONS` to `/xray/events/xorc/sdk/v1`: For Javascript clients to get the CORS headers.
